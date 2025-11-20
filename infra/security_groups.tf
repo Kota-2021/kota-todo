@@ -81,10 +81,6 @@ resource "aws_security_group" "rds" {
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs_fargate.id]
   }
-
-  // インバウンド２：SSM踏み台EC2のSGからPostgreSQLポート(5432)へのアクセスを許可
-  // NOTE: SSM踏み台用SGは別途定義しますが、ここではリソースIDで参照することを想定
-  // security_groups = [aws_security_group.ssm_bastion.id]
 }
 
 
@@ -124,4 +120,20 @@ resource "aws_security_group" "ssm_bastion" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  
+}
+
+# ----------------------------------------------------
+# 6. RDS SG Inbound Rule: Allow access from SSM Bastion SG
+# ----------------------------------------------------
+resource "aws_security_group_rule" "rds_inbound_bastion" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  # 接続元として、踏み台サーバーに適用されているSGを指定
+  source_security_group_id = aws_security_group.ssm_bastion.id 
+  # 接続先として、RDSに適用されているSGを指定
+  security_group_id = aws_security_group.rds.id 
+  description       = "Allow PostgreSQL access from SSM Bastion"
 }

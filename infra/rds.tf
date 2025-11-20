@@ -29,7 +29,7 @@ resource "aws_db_instance" "main" {
   instance_class = "db.t3.micro" 
   
   # 接続情報
-  username = var.db_username
+  username = "db_masteruser_428924"
   # パスワードは機密情報としてvariables.tfから取得
   password = var.db_password 
 
