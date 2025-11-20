@@ -22,25 +22,16 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  // アウトバウンド：必要最低限に制限
-  
-  // 1. ECS Fargateへの接続 (アプリケーションポート: 8080)
+  // アウトバウンド：VPC内のすべてのプライベートIP（ターゲット）へ許可
   egress {
-    description     = "To ECS Fargate Targets"
-    from_port       = 8080 // ECSが待ち受けるポート
-    to_port         = 8080
-    protocol        = "tcp"
-    // 宛先をECS FargateのSGに限定
-    security_groups = [aws_security_group.ecs_fargate.id] 
-  }
-
-  // 2. 外部へのHTTPS通信 (CloudWatchへのメトリクス送信、ALB管理など)
-  egress {
-    description     = "To Internet/AWS APIs (HTTPS)"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    cidr_blocks     = ["0.0.0.0/0"]
+    description = "To VPC Internal Addresses"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    
+    // 【修正点】VPCのCIDRブロック（例: 10.0.0.0/16）を直接指定
+    // これによりecs_fargateのSGへの参照が不要になり、循環が解消。
+    cidr_blocks = [var.vpc_cidr]
   }
 }
 
@@ -62,33 +53,14 @@ resource "aws_security_group" "ecs_fargate" {
     security_groups = [aws_security_group.alb.id] // ソースをALBのSGに限定
   }
 
-  // アウトバウンド：必要最低限に制限
-  
-  // 1. RDSへの接続 (5432)
+  // アウトバウンド：すべてのプロトコルで VPC 外 (0.0.0.0/0) へ接続を許可
+  // これで、RDS/Redisへの通信も、NAT Gateway経由での外部（ECRなど）通信も許可される。
   egress {
-    description     = "To RDS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
-
-  // 2. Redisへの接続 (6379)
-  egress {
-    description     = "To Redis"
-    from_port       = 6379
-    to_port         = 6379
-    protocol        = "tcp"
-    security_groups = [aws_security_group.redis.id]
-  }
-
-  // 3. 外部へのHTTPS通信 (AWS API, ECR Pull, SQSなど)
-  egress {
-    description     = "To Internet (HTTPS for AWS/Packages)"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    cidr_blocks     = ["0.0.0.0/0"] // NAT Gateway経由で外へ
+    description = "Allow all outbound (To DB/Redis/NAT)"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 

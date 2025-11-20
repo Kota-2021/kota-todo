@@ -8,7 +8,7 @@ terraform {
     key    = "prod/go-realtime-task-api/terraform.tfstate"
 
     // 3. リージョン
-    region = var.vpc_region
+    region = "ap-northeast-1"
 
     // 4. State Lock用のDynamoDBテーブル名
     dynamodb_table = "terraform-lock-table"
@@ -18,17 +18,5 @@ terraform {
 
     // 6.ローカル環境のプロファイルを明示的に指定
     profile        = "my-portfolio-admin"
-  }
-}
-
-// ----------------------------------------------------
-// 修正案：profileの追加
-// ----------------------------------------------------
-terraform {
-  backend "s3" {
-    
-    // 【追加】ローカル環境のプロファイルを明示的に指定
-    // (例: ~/.aws/credentials に定義したプロファイル名)
-    profile        = "my-portfolio-admin" 
   }
 }

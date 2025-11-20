@@ -18,10 +18,3 @@ variable "db_password" {
   type        = string
   sensitive   = true // Stateファイルに平文で保存されないように設定
 }
-
-// VPCのリージョン
-variable "vpc_region" {
-  description = "Region for the AWS resources."
-  type        = string
-  default     = "ap-northeast-1"
-}
