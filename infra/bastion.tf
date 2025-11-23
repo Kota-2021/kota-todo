@@ -76,4 +76,5 @@ resource "aws_instance" "ssm_bastion" {
   tags = {
     Name = "${var.project_name}-ssm-bastion"
   }
+  
 }
