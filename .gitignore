@@ -49,5 +49,5 @@ Thumbs.db
 .env
 private_key.pem
 
-# --- Document ---
-document/
+# --- ignore files and directories ---
+ignores/

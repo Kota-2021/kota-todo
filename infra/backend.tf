@@ -10,13 +10,17 @@ terraform {
     // 3. リージョン
     region = "ap-northeast-1"
 
-    // 4. State Lock用のDynamoDBテーブル名
-    dynamodb_table = "terraform-lock-table"
+    // 4. State Lock DynamoDBから変更
+    # dynamodb_table = "terraform-lock-table"
+    use_lockfile  = true
 
     // 5. SSL/TLSによる暗号化を有効化
     encrypt = true
 
     // 6.ローカル環境のプロファイルを明示的に指定
     profile        = "my-portfolio-admin"
+
+    // 7.  **重要** Stateファイルを強制的に削除
+    force_destroy = true
   }
 }
