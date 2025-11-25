@@ -1,0 +1,16 @@
+FROM golang:1.25-alpine
+
+WORKDIR /app
+
+# 依存関係をコピー（go.sumが存在しない場合でもエラーにならないように）
+COPY go.mod ./
+# go.sumが存在する場合のみコピー
+COPY go.sum* ./
+RUN go mod download
+
+# アプリケーションコードはボリュームマウントで共有されるため、ここではコピーしない
+
+EXPOSE 8080
+
+# 開発モード: コード変更を監視して自動リロード
+CMD ["go", "run", "./cmd/api"]
