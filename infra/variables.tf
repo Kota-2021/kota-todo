@@ -18,3 +18,24 @@ variable "db_password" {
   type        = string
   sensitive   = true // Stateファイルに平文で保存されないように設定
 }
+
+// ECSタスクのCPU設定（Fargate互換の値）
+variable "ecs_task_cpu" {
+  description = "CPU units for ECS task (Fargate compatible: 256, 512, 1024, etc.)"
+  type        = string
+  default     = "256" // 0.25 vCPU (最小値)
+}
+
+// ECSタスクのメモリ設定（Fargate互換の値）
+variable "ecs_task_memory" {
+  description = "Memory for ECS task in MB (Fargate compatible: 512, 1024, 2048, etc.)"
+  type        = string
+  default     = "512" // 512 MB (最小値)
+}
+
+// ECSサービスの希望タスク数
+variable "ecs_service_desired_count" {
+  description = "Desired number of ECS tasks to run"
+  type        = number
+  default     = 1
+}

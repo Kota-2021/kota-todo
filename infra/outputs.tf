@@ -56,3 +56,52 @@ output "alb_sg_id" {
   description = "The ID of the ALB security group"
   value       = aws_security_group.alb.id
 }
+
+# ----------------------------------------------------
+# 6. ECR情報
+# ----------------------------------------------------
+output "ecr_repository_url" {
+  description = "The URL of the ECR repository"
+  value       = aws_ecr_repository.main.repository_url
+}
+
+# ----------------------------------------------------
+# 7. ECS情報
+# ----------------------------------------------------
+output "ecs_cluster_name" {
+  description = "The name of the ECS cluster"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "ecs_cluster_arn" {
+  description = "The ARN of the ECS cluster"
+  value       = aws_ecs_cluster.main.arn
+}
+
+output "ecs_service_name" {
+  description = "The name of the ECS service"
+  value       = aws_ecs_service.main.name
+}
+
+# ----------------------------------------------------
+# 8. ALB情報
+# ----------------------------------------------------
+output "alb_dns_name" {
+  description = "The DNS name of the ALB"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_arn" {
+  description = "The ARN of the ALB"
+  value       = aws_lb.main.arn
+}
+
+output "alb_zone_id" {
+  description = "The canonical hosted zone ID of the ALB"
+  value       = aws_lb.main.zone_id
+}
+
+output "target_group_arn" {
+  description = "The ARN of the target group"
+  value       = aws_lb_target_group.main.arn
+}
