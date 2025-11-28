@@ -28,11 +28,11 @@ jobs:
           terraform_version: 1.13.5
           
       - name: Terraform Init
-        run: terraform init
+        # ★★★ 修正箇所: -lock=false フラグを追加 ★★★
+        run: terraform init -lock=false 
         working-directory: ./infra
         env:
-          # Initに必要であればDBパスワードを渡す
-          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} 
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
 
       # ★★★ ロック解除コマンド（ロックIDを直書き） ★★★
       - name: Force Unlock State
