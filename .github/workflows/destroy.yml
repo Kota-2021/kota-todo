@@ -1,0 +1,54 @@
+name: 🚨 Manual Destroy Environment
+
+on:
+  workflow_dispatch: # ★手動でのみ実行可能にする★
+    inputs:
+      confirm:
+        description: 'Type "DESTROY" to confirm the action. WARNING: This will delete all infrastructure except S3 backend.'
+        required: true
+        default: 'NO'
+
+jobs:
+  destroy:
+    # ユーザーが "DESTROY" と入力した場合のみ実行
+    if: github.event.inputs.confirm == 'DESTROY'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    environment: production # 🚨 環境保護ルールが設定可能
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. AWS認証情報の取得 (OIDC認証)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActions-Terraform-Deployer
+          aws-region: ap-northeast-1
+
+      # 2. Terraform実行環境のセットアップ
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+          
+      # 3. Terraform Init の実行
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
+
+      # 4. Terraform Destroy の実行
+      - name: Terraform Destroy All Except S3 Backend
+        # S3をターゲットから外すロジックはTerraform側で制御するため、ここでは単純なDestroyを実行
+        run: terraform destroy -auto-approve
+        working-directory: ./infra
+        env:
+          # Destroy時にも一部リソースが変数を参照するため渡す
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
