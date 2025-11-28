@@ -207,8 +207,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "DB_NAME"
-          value = "my-portfolio-2025-db" # RDS作成時に指定したDB名
-          # value = "portfolio_db" # RDS作成時に指定したDB名
+          value = "portfolio_db" # RDS作成時に指定したDB名
         },
         {
           name  = "DB_SSLMODE"

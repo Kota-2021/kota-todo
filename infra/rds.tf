@@ -31,7 +31,9 @@ resource "aws_db_instance" "main" {
   # 接続情報
   username = "db_masteruser_428924"
   # パスワードは機密情報としてvariables.tfから取得
-  password = var.db_password 
+  password = var.db_password
+  # DB名 20251128追加byKota
+  db_name = "portfolio_db"
 
   # ストレージ設定
   allocated_storage    = 20 # 20GB (最小サイズ)
