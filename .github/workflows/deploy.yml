@@ -97,6 +97,5 @@ jobs:
           # Secretsを再度envに渡す
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
         # Planステップで設定した環境変数 IMAGE_URI をここで参照します
-        run: terraform apply -auto-approve -input=false \
-          -var="app_image_uri=${{ env.IMAGE_URI }}" tfplan
+        run: terraform apply -auto-approve -input=false -var="app_image_uri=${{ env.IMAGE_URI }}" tfplan
         working-directory: ./infra
