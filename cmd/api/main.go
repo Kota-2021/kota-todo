@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -123,4 +125,29 @@ func main() {
 	}
 
 	log.Println("\n=== 接続テスト完了 ===")
+
+	// --- ★ここから追加★ httpサーバーの起動---
+	// 💡 (1) ginルーターの初期化（ginを使用する場合）
+	r := gin.Default()
+
+	// 💡 (2) ヘルスチェックエンドポイントの実装
+	// ALBターゲットグループのヘルスチェックパスである "/health" に対応
+	r.GET("/health", func(c *gin.Context) {
+		// 常にHTTP 200 OKを返す
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
+	})
+
+	// 💡 (3) HTTPサーバーの起動
+	// ECSタスク定義で指定したポート (8080) でリッスンする
+	serverPort := os.Getenv("PORT") // もし環境変数PORTを使用していれば
+	if serverPort == "" {
+		serverPort = "8080" // デフォルトとして8080を使用
+	}
+
+	log.Printf("Starting HTTP server on port %s", serverPort)
+	if err := r.Run(":" + serverPort); err != nil {
+		log.Fatalf("Failed to run server: %v", err)
+	}
+	// --- ★ここまで追加★ ---
+
 }
