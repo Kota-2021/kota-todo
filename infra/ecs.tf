@@ -52,19 +52,6 @@ resource "aws_iam_role" "ecs_task_execution" {
         Principal = {
           Service = "ecs-tasks.amazonaws.com"
         }
-      },
-      # ★ Secrets Manager アクセス権限を追記 ★
-      {
-        Sid    = "SecretsManagerAccess"
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
-        ]
-        Resource = [
-          # RDSパスワードシークレットのARNを指定
-          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password-*"
-        ]
       }
     ]
   })
@@ -79,6 +66,34 @@ resource "aws_iam_role" "ecs_task_execution" {
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_ecr" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Secrets Managerへのアクセス権限を定義するIAMポリシー
+resource "aws_iam_policy" "ecs_secrets_policy" {
+  name        = "${var.project_name}-ecs-secrets-policy"
+  description = "Allows ECS Task Execution Role to retrieve DB password from Secrets Manager."
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          # RDSパスワードシークレットのARNを指定
+          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password-*"
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_secrets_attachment" {
+  role       = aws_iam_role.ecs_task_execution.name
+  policy_arn = aws_iam_policy.ecs_secrets_policy.arn
 }
 
 # CloudWatch Logsにログを送信する権限（上記ポリシーに含まれているが、明示的に追加可能）
