@@ -152,7 +152,8 @@ resource "aws_ecs_task_definition" "main" {
   container_definitions = jsonencode([
     {
       name  = "${var.project_name}-api"
-      image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${aws_ecr_repository.main.name}:latest"
+      image     = var.app_image_uri,
+      # image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${aws_ecr_repository.main.name}:latest"
       
       # ポートマッピング
       portMappings = [

@@ -39,3 +39,9 @@ variable "ecs_service_desired_count" {
   type        = number
   default     = 1
 }
+
+// ECSタスク定義のイメージURI
+variable "app_image_uri" {
+  description = "ECRにプッシュされた新しいDockerイメージのURI (例: 12345.dkr.ecr.region.amazonaws.com/repo:sha)"
+  type        = string
+}

@@ -21,6 +21,7 @@ terraform {
     profile        = "my-portfolio-admin"
 
     // 7.  **重要** Stateファイルを強制的に削除
-    force_destroy = true
+    // 無効な設定なのでコメントアウト
+    # force_destroy = true
   }
 }
