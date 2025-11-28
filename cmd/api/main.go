@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"time"
 
@@ -24,10 +25,14 @@ func main() {
 		log.Fatalf("環境変数が設定されていません")
 	}
 
+	// ★ 修正箇所: パスワードをURLエンコードする ★
+	// パスワードに含まれる可能性のある特殊文字を安全にURLに含める
+	encodedPassword := url.QueryEscape(dbPassword)
+
 	// 接続文字列を構築
 	connStr := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		dbUser, dbPassword, dbHost, dbPort, dbName, dbSSLMode,
+		dbUser, encodedPassword, dbHost, dbPort, dbName, dbSSLMode,
 	)
 
 	// 本番時修正：詳細情報はログに出力しない
