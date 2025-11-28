@@ -66,6 +66,7 @@ jobs:
           # GitHub Secretsからパスワードを取得し、TF_VAR_として設定
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
         run: terraform init
+        working-directory: ./infra
       
       # 9. Terraform Plan の実行 (ECSタスク定義のイメージURIを更新)
       # run-1. 完全なイメージURIを構築
@@ -86,6 +87,7 @@ jobs:
           terraform plan -no-color -input=false \
             -var="app_image_uri=$IMAGE_URI" \
             -out=tfplan
+        working-directory: ./infra
 
       # 10. Terraform Apply の実行
       - name: Terraform Apply
@@ -95,3 +97,4 @@ jobs:
         # Planステップで設定した環境変数 IMAGE_URI をここで参照します
         run: terraform apply -auto-approve -input=false \
           -var="app_image_uri=${{ env.IMAGE_URI }}" tfplan
+        working-directory: ./infra
