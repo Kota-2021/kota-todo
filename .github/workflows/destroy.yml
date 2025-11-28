@@ -44,15 +44,6 @@ jobs:
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
 
-      # ★★★ 一時的に追加するステップ ★★★
-      - name: Force Unlock State
-        # -force フラグでロックを強制解除
-        run: terraform force-unlock -force 3ae2ccf7-4724-be2b-400b-a17e00ac2b1c
-        working-directory: ./infra
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} 
-      # ★★★ ここまで追加 ★★★
-
       # 4. Terraform Destroy の実行
       - name: Terraform Destroy All Except S3 Backend
         # S3をターゲットから外すロジックはTerraform側で制御するため、ここでは単純なDestroyを実行
