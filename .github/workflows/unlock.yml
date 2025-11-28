@@ -33,9 +33,18 @@ jobs:
         working-directory: ./infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
-
-      # ★★★ ロック解除コマンド（ロックIDを直書き） ★★★
-      - name: Force Unlock State
-        # ロックID: 3ae2ccf7-4724-be2b-400b-a17e00ac2b1c を使用
-        run: terraform force-unlock -force 3ae2ccf7-4724-be2b-400b-a17e00ac2b1c
+          
+      # ★★★ 修正箇所: Force Unlock と Destroy を統合 ★★★
+      - name: Force Unlock and Destroy Environment
+        run: |
+          # 1. ロックを強制解除
+          echo "Attempting to force unlock the state..."
+          terraform force-unlock -force 3ae2ccf7-4724-be2b-400b-a17e00ac2b1c
+          
+          # 2. ロック解除の確認を待たずに、すぐにDestroyを実行
+          echo "State unlocked. Starting immediate destroy..."
+          terraform destroy -auto-approve
+        
         working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
