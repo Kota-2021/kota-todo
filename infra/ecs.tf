@@ -89,6 +89,19 @@ resource "aws_iam_role" "ecs_task" {
         Principal = {
           Service = "ecs-tasks.amazonaws.com"
         }
+      },
+      # ★ Secrets Manager アクセス権限を追記 ★
+      {
+        Sid    = "SecretsManagerAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          # RDSパスワードシークレットのARNを指定
+          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password-*"
+        ]
       }
     ]
   })
@@ -205,12 +218,12 @@ resource "aws_ecs_task_definition" "main" {
       # シークレット（機密情報は環境変数ではなくシークレットとして管理することを推奨）
       # 本番環境ではSecrets ManagerやParameter Storeを使用することを推奨
       # 開発環境では上記の環境変数として設定（セキュリティリスクがあるため本番では非推奨）
-      # secrets = [
-      #   {
-      #     name      = "DB_PASSWORD"
-      #     valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password"
-      #   }
-      # ]
+      secrets = [
+        {
+          name      = "DB_PASSWORD"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+        }
+      ]
 
       # ログ設定（CloudWatch Logs）
       logConfiguration = {
