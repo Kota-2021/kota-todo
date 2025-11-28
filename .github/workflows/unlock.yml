@@ -1,0 +1,41 @@
+name: 🔑 Manual State Unlock (Temporary)
+
+on:
+  workflow_dispatch: # 手動実行専用
+
+jobs:
+  unlock:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # deploy.ymlやdestroy.ymlと同じIAMロールのARNを指定
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActions-Terraform-Deployer
+          aws-region: ap-northeast-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+          
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+        env:
+          # Initに必要であればDBパスワードを渡す
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} 
+
+      # ★★★ ロック解除コマンド（ロックIDを直書き） ★★★
+      - name: Force Unlock State
+        # ロックID: 3ae2ccf7-4724-be2b-400b-a17e00ac2b1c を使用
+        run: terraform force-unlock -force 3ae2ccf7-4724-be2b-400b-a17e00ac2b1c
+        working-directory: ./infra
