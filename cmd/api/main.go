@@ -130,6 +130,11 @@ func main() {
 	// 💡 (1) ginルーターの初期化（ginを使用する場合）
 	r := gin.Default()
 
+	// 💡 (2) ルートパスエンドポイント（ブラウザ確認用） 20251128追加byKota
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "Welcome to my-portfolio-2025 API", "environment": "production"})
+	})
+
 	// 💡 (2) ヘルスチェックエンドポイントの実装
 	// ALBターゲットグループのヘルスチェックパスである "/health" に対応
 	r.GET("/health", func(c *gin.Context) {
