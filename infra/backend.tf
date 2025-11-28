@@ -18,7 +18,8 @@ terraform {
     encrypt = true
 
     // 6.ローカル環境のプロファイルを明示的に指定
-    profile        = "my-portfolio-admin"
+    // 本番環境への移行にあたり、コメントアウト。
+    # profile        = "my-portfolio-admin"
 
     // 7.  **重要** Stateファイルを強制的に削除
     // 無効な設定なのでコメントアウト
