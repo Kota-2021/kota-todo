@@ -1,0 +1,66 @@
+name: 🚨 Manual Look State Environment
+
+on:
+  workflow_dispatch: # ★手動でのみ実行可能にする★
+    inputs:
+      confirm:
+        description: 'Type "LOOKSTATE" to confirm the action. WARNING: This will look at the state of the infrastructure.'
+        required: true
+        default: 'NO'
+
+jobs:
+  lookstate:
+    # ユーザーが "LOOKSTATE" と入力した場合のみ実行
+    if: github.event.inputs.confirm == 'LOOKSTATE'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    environment: production # 環境保護ルールが設定可能
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. AWS認証情報の取得 (OIDC認証)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActions-Terraform-Deployer
+          aws-region: ap-northeast-1
+
+      # 2. Terraform実行環境のセットアップ
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+          
+      # 3. Terraform Init の実行
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
+      
+      # 4. Terraform Destroy の実行
+      - name: Terraform Destroy All Except S3 Backend
+        # -auto-approve で確認プロンプトをスキップ
+        run: terraform destroy -auto-approve
+        working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
+
+      # Stateリストの取得とファイル保存
+      - name: List Remaining State Resources
+        run: |
+          echo "Listing resources remaining in the state file..."
+          echo "--------------------------------"
+          # state list コマンドの出力をファイルに保存
+          terraform state list > state_list.txt
+          # 結果をログに出力
+          cat state_list.txt
+          echo "--------------------------------"
+          echo "End of state list"
+        working-directory: ./infra
