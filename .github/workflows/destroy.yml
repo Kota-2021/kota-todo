@@ -43,6 +43,12 @@ jobs:
         working-directory: ./infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
+      
+      # ★★★ 一時的に追加するステップ: StateからECRリポジトリを削除 ★★★
+      - name: Remove ECR Repository from State
+        # ECRリポジトリのアドレスは aws_ecr_repository.main であると仮定します
+        run: terraform state rm aws_ecr_repository.main
+        working-directory: ./infra
 
       # 4. Terraform Destroy の実行
       - name: Terraform Destroy All Except S3 Backend
