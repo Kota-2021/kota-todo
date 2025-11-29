@@ -53,7 +53,8 @@ jobs:
         
         # AWSへの問い合わせをスキップしてStateファイルの内容をクリア
         echo "Running destroy with -refresh=false to clear any lingering State entries..."
-        terraform destroy -auto-approve -refresh=false
+        # 20251129byKota ※ここでは、app_image_uriを空にしています。これは、ECSタスク定義のイメージURIを空にするためです。
+        terraform destroy -auto-approve -refresh=false -var="app_image_uri="
         
       working-directory: ./infra
       env:
