@@ -43,6 +43,14 @@ jobs:
         working-directory: ./infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
+      
+      # 4. Terraform Destroy の実行
+      - name: Terraform Destroy All Except S3 Backend
+        # -auto-approve で確認プロンプトをスキップ
+        run: terraform destroy -auto-approve
+        working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
 
       # ★★★ 修正箇所: Stateリストの取得とファイル保存 ★★★
       # - name: 📝 List Remaining State Resources
@@ -56,74 +64,74 @@ jobs:
           
       #   working-directory: ./infra
       
-      - name: 🧹 Force Cleanup Terraform State
-        run: |
-          echo "Starting state cleanup (removing all tracked resources from state file)..."
+      # - name: 🧹 Force Cleanup Terraform State
+      #   run: |
+      #     echo "Starting state cleanup (removing all tracked resources from state file)..."
           
-          # 物理リソースの State をすべて削除します
-          # aws_cloudwatch_log_group.ecs
-          terraform state rm aws_cloudwatch_log_group.ecs
+      #     # 物理リソースの State をすべて削除します
+      #     # aws_cloudwatch_log_group.ecs
+      #     terraform state rm aws_cloudwatch_log_group.ecs
           
-          # aws_ecr_lifecycle_policy.main は aws_ecr_repository.main が削除されたため、これも削除
-          terraform state rm aws_ecr_lifecycle_policy.main
+      #     # aws_ecr_lifecycle_policy.main は aws_ecr_repository.main が削除されたため、これも削除
+      #     terraform state rm aws_ecr_lifecycle_policy.main
           
-          # ECS/Task Definition
-          terraform state rm aws_ecs_task_definition.main
+      #     # ECS/Task Definition
+      #     terraform state rm aws_ecs_task_definition.main
           
-          # ElastiCache (Redis)
-          terraform state rm aws_elasticache_cluster.main
-          terraform state rm aws_elasticache_subnet_group.main
+      #     # ElastiCache (Redis)
+      #     terraform state rm aws_elasticache_cluster.main
+      #     terraform state rm aws_elasticache_subnet_group.main
           
-          # IAM Roles/Policies/Instance Profile
-          terraform state rm aws_iam_instance_profile.ssm_instance
-          terraform state rm aws_iam_policy.ecs_secrets_policy
-          terraform state rm aws_iam_role.ecs_task
-          terraform state rm aws_iam_role.ecs_task_execution
-          terraform state rm aws_iam_role.ssm_instance
-          terraform state rm aws_iam_role_policy.ecs_task_sqs
-          terraform state rm aws_iam_role_policy_attachment.ecs_secrets_attachment
-          terraform state rm aws_iam_role_policy_attachment.ecs_task_execution_ecr
-          terraform state rm aws_iam_role_policy_attachment.ssm_managed_instance
+      #     # IAM Roles/Policies/Instance Profile
+      #     terraform state rm aws_iam_instance_profile.ssm_instance
+      #     terraform state rm aws_iam_policy.ecs_secrets_policy
+      #     terraform state rm aws_iam_role.ecs_task
+      #     terraform state rm aws_iam_role.ecs_task_execution
+      #     terraform state rm aws_iam_role.ssm_instance
+      #     terraform state rm aws_iam_role_policy.ecs_task_sqs
+      #     terraform state rm aws_iam_role_policy_attachment.ecs_secrets_attachment
+      #     terraform state rm aws_iam_role_policy_attachment.ecs_task_execution_ecr
+      #     terraform state rm aws_iam_role_policy_attachment.ssm_managed_instance
           
-          # EC2/Bastion
-          terraform state rm aws_instance.ssm_bastion
+      #     # EC2/Bastion
+      #     terraform state rm aws_instance.ssm_bastion
 
-          # ALB/VPC/Networking (VPCやIGWは依存関係で最後に削除されるべきですが、State RMなら問題ありません)
-          terraform state rm aws_lb.main
-          terraform state rm aws_lb_listener.http
-          terraform state rm aws_lb_target_group.main
-          terraform state rm aws_eip.nat_a
-          terraform state rm aws_nat_gateway.a
-          terraform state rm aws_internet_gateway.main
+      #     # ALB/VPC/Networking (VPCやIGWは依存関係で最後に削除されるべきですが、State RMなら問題ありません)
+      #     terraform state rm aws_lb.main
+      #     terraform state rm aws_lb_listener.http
+      #     terraform state rm aws_lb_target_group.main
+      #     terraform state rm aws_eip.nat_a
+      #     terraform state rm aws_nat_gateway.a
+      #     terraform state rm aws_internet_gateway.main
           
-          # Route Tables / Associations
-          terraform state rm aws_route_table.private_a
-          terraform state rm aws_route_table.public
-          terraform state rm aws_route_table_association.private_a
-          terraform state rm aws_route_table_association.private_b
-          terraform state rm aws_route_table_association.public_a
-          terraform state rm aws_route_table_association.public_b
+      #     # Route Tables / Associations
+      #     terraform state rm aws_route_table.private_a
+      #     terraform state rm aws_route_table.public
+      #     terraform state rm aws_route_table_association.private_a
+      #     terraform state rm aws_route_table_association.private_b
+      #     terraform state rm aws_route_table_association.public_a
+      #     terraform state rm aws_route_table_association.public_b
           
-          # Security Groups / Rules
-          terraform state rm aws_security_group.alb
-          terraform state rm aws_security_group.ecs_fargate
-          terraform state rm aws_security_group.rds
-          terraform state rm aws_security_group.redis
-          terraform state rm aws_security_group.ssm_bastion
-          terraform state rm aws_security_group_rule.rds_inbound_bastion
+      #     # Security Groups / Rules
+      #     terraform state rm aws_security_group.alb
+      #     terraform state rm aws_security_group.ecs_fargate
+      #     terraform state rm aws_security_group.rds
+      #     terraform state rm aws_security_group.redis
+      #     terraform state rm aws_security_group.ssm_bastion
+      #     terraform state rm aws_security_group_rule.rds_inbound_bastion
           
-          # SQS
-          terraform state rm aws_sqs_queue.dlq
-          terraform state rm aws_sqs_queue.main
-          terraform state rm aws_sqs_queue_redrive_policy.main_queue_redrive_policy
+      #     # SQS
+      #     terraform state rm aws_sqs_queue.dlq
+      #     terraform state rm aws_sqs_queue.main
+      #     terraform state rm aws_sqs_queue_redrive_policy.main_queue_redrive_policy
           
-          # Subnets / VPC (最後に残りのVPCコンポーネントを削除)
-          terraform state rm aws_subnet.private_a
-          terraform state rm aws_subnet.private_b
-          terraform state rm aws_subnet.public_a
-          terraform state rm aws_subnet.public_b
-          terraform state rm aws_vpc.main
+      #     # Subnets / VPC (最後に残りのVPCコンポーネントを削除)
+      #     terraform state rm aws_subnet.private_a
+      #     terraform state rm aws_subnet.private_b
+      #     terraform state rm aws_subnet.public_a
+      #     terraform state rm aws_subnet.public_b
+      #     terraform state rm aws_vpc.main
 
-          echo "State cleanup complete. State file is now empty (except for data sources)."
+      #     echo "State cleanup complete. State file is now empty (except for data sources)."
         
-        working-directory: ./infra
+      #   working-directory: ./infra
