@@ -43,16 +43,8 @@ jobs:
         working-directory: ./infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
-      
-      # 4. Terraform Destroy の実行
-      - name: Terraform Destroy All Except S3 Backend
-        # -auto-approve で確認プロンプトをスキップ
-        run: terraform destroy -auto-approve
-        working-directory: ./infra
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
 
-      # Stateリストの取得とファイル保存
+      # 4. Terraform State List の実行
       - name: List Remaining State Resources
         run: |
           echo "Listing resources remaining in the state file..."
