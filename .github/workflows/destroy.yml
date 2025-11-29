@@ -44,17 +44,38 @@ jobs:
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
       
-      # ★★★ 一時的に追加するステップ: StateからECRリポジトリを削除 ★★★
-      - name: Remove ECR Repository from State
-        # ECRリポジトリのアドレスは aws_ecr_repository.main であると仮定します
-        run: terraform state rm aws_ecr_repository.main
-        working-directory: ./infra
+      # ★★★ 修正箇所: DestroyコマンドをState RMコマンドに置き換える ★★★
+      - name: 🧹 Force Cleanup Terraform State
+        run: |
+          echo "Starting state cleanup (removing all resources from state file)..."
 
-      # 4. Terraform Destroy の実行
-      - name: Terraform Destroy All Except S3 Backend
-        # S3をターゲットから外すロジックはTerraform側で制御するため、ここでは単純なDestroyを実行
-        run: terraform destroy -auto-approve
+          # RDS関連
+          terraform state rm aws_db_instance.main
+          terraform state rm aws_db_subnet_group.main
+
+          # ECS関連
+          terraform state rm aws_ecs_service.main
+          terraform state rm aws_ecs_cluster.main
+          terraform state rm aws_ecr_repository.main # 前回の失敗の原因
+          terraform state rm aws_iam_role.ecs_execution
+          terraform state rm aws_iam_role.task_execution
+
+          # ALB/Networking関連
+          terraform state rm aws_lb.main
+          terraform state rm aws_lb_listener.http
+          terraform state rm aws_lb_target_group.http
+
+          # VPC関連
+          terraform state rm aws_vpc.main
+          terraform state rm aws_internet_gateway.main
+          terraform state rm aws_route_table.public
+          terraform state rm aws_subnet.public_a
+          terraform state rm aws_subnet.public_c
+          terraform state rm aws_security_group.allow_rds_traffic
+          terraform state rm aws_security_group.allow_web_traffic
+
+          echo "State cleanup complete."
+        
         working-directory: ./infra
         env:
-          # Destroy時にも一部リソースが変数を参照するため渡す
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
