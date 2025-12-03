@@ -16,6 +16,14 @@ type AuthController struct {
 	AuthService *service.AuthService
 }
 
+// SigninResponse: ログイン成功時に返すDTO（Data Transfer Object）
+// 認証に成功したユーザー情報とJWTを含める
+type SigninResponse struct {
+	Token string `json:"token"`
+	// 必要であればユーザー名などの情報もここに含める
+	// User *models.UserResponse `json:"user"`
+}
+
 // NewAuthController は AuthController の新しいインスタンスを作成します
 func NewAuthController(authService *service.AuthService) *AuthController {
 	return &AuthController{AuthService: authService}
@@ -57,19 +65,13 @@ func (c *AuthController) Signup(ctx *gin.Context) {
 func (c *AuthController) Signin(ctx *gin.Context) {
 	var req models.SigninRequest
 
-	// 1. リクエストボディのバインドとバリデーション (ステップ2-1)
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "リクエスト形式が不正です"})
 		return
 	}
 
-	// 2. Service層での認証処理を呼び出し (ステップ2-2, 2-3)
-	// ここで認証が成功し、JWTが生成される想定です
-	// Service層からJWTトークンとユーザー情報を取得するように調整が必要です
-	// 例: token, user, err := h.AuthService.AuthenticateAndGenerateToken(req.Username, req.Password)
-
-	// 現在は認証ロジックのみを呼び出し、トークン生成は次のステップで行います
-	user, err := c.AuthService.AuthenticateUser(req.Username, req.Password)
+	// 1. Service層の呼び出し (戻り値にトークンが追加されている)
+	_, token, err := c.AuthService.AuthenticateUser(req.Username, req.Password)
 
 	if err != nil {
 		// 認証失敗時 (ユーザーNotFoundやパスワード不一致) のエラーハンドリング
@@ -77,16 +79,17 @@ func (c *AuthController) Signin(ctx *gin.Context) {
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()}) // 401 Unauthorized
 			return
 		}
-		// その他のサービス層エラー (DB接続エラーなど)
+		// その他のサービス層エラー (DB接続エラー、JWT生成エラーなど)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ログイン処理中にエラーが発生しました"})
 		return
 	}
 
-	// --- ここから JWT 生成 (ステップ2-4) と レスポンス返却 (ステップ2-5) が続きます ---
+	// 2. 成功レスポンス (200 OK) の返却
+	response := SigninResponse{
+		Token: token,
+		// User: &models.UserResponse{ID: user.ID, Username: user.Username}, // 必要であれば
+	}
 
-	// 認証が成功した時点 (JWT生成前)
-	// c.JSON(http.StatusOK, gin.H{"message": "認証成功 (JWT生成と返却待ち)"})
-
-	// JWT生成に進むため、一旦コメントアウト
-	// ...
+	// ログインはリソース作成ではないため、200 OKを使用するのが一般的です
+	ctx.JSON(http.StatusOK, response)
 }

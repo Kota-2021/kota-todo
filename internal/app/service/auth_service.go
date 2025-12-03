@@ -45,24 +45,30 @@ func (s *AuthService) Signup(req *models.SignupRequest) (*models.User, error) {
 }
 
 // AuthenticateUser はユーザー認証のビジネスロジックを実行します
-func (s *AuthService) AuthenticateUser(username, password string) (*models.User, error) {
+func (s *AuthService) AuthenticateUser(username, password string) (*models.User, string, error) {
 	// 1. ユーザー名からユーザーを取得
 	user, err := s.UserRepo.FindByUsername(username)
 	if err != nil {
 		// レコードが見つからないエラーの場合、認証失敗として扱う
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("認証情報が正しくありません") // 認証失敗
+			return nil, "", errors.New("認証情報が正しくありません") // 認証失敗
 		}
-		return nil, err // その他のDBエラー
+		return nil, "", err // その他のDBエラー
 	}
 
 	// 2. パスワード照合 (ステップ2-3)
 	// CompareHashAndPassword(保存されているハッシュ, 平文のパスワード)
 	if ok, err := auth.CheckPasswordHash(password, user.Password); !ok {
-		return nil, err // 認証失敗
+		return nil, "", err // 認証失敗
 	}
 
-	// 認証成功
-	return user, nil
+	// 3. JWT生成 (ステップ2-4)
+	token, err := auth.GenerateToken(user.ID) // auth.GenerateToken を呼び出し
+	if err != nil {
+		return nil, "", errors.New("failed to generate token")
+	}
+
+	// 成功したユーザー情報とトークンを返す
+	return user, token, nil
 
 }
