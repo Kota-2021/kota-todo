@@ -3,6 +3,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -41,4 +42,37 @@ func GenerateToken(userID uint) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+// ValidateToken はJWT文字列を受け取り、検証してUserIDを返します。
+func ValidateToken(tokenString string) (uint, error) {
+	// トークンのパースと検証
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		// トークンの署名アルゴリズムが想定通りかチェック
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Method)
+		}
+		// シークレットキーを返します
+		return []byte(JWT_SECRET), nil
+	})
+
+	if err != nil {
+		// トークンの検証失敗 (署名無効、期限切れ、不正な形式など)
+		return 0, fmt.Errorf("token validation failed: %w", err)
+	}
+
+	// 検証に成功した場合、クレームを取得
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		// クレームの型変換失敗、またはトークンが有効でない
+		return 0, fmt.Errorf("invalid token claims or not valid")
+	}
+
+	// 期限切れチェック (ParseWithClaimsが通常処理しますが、念のため手動チェックも可能)
+	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
+		return 0, fmt.Errorf("token expired")
+	}
+
+	// 成功: 抽出したUserIDを返却
+	return claims.UserID, nil
 }

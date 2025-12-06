@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,12 +8,20 @@ import (
 	"os"
 	"time"
 
+	"my-portfolio-2025/internal/app/handler"
+	"my-portfolio-2025/internal/app/models"
+	"my-portfolio-2025/internal/app/repository"
+	"my-portfolio-2025/internal/app/router"
+	"my-portfolio-2025/internal/app/service"
+
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func main() {
-	log.Println("=== PostgreSQL 接続テスト開始 ===")
+// setupDatabase はDB接続の確立、テスト、マイグレーションを行います
+func setupDatabase() *gorm.DB {
+	log.Println("=== データベース接続開始 ===")
 
 	// 環境変数から接続情報を取得
 	dbHost := os.Getenv("DB_HOST")
@@ -23,36 +30,40 @@ func main() {
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 	dbSSLMode := os.Getenv("DB_SSLMODE")
+
 	if dbHost == "" || dbPort == "" || dbUser == "" || dbPassword == "" || dbName == "" || dbSSLMode == "" {
-		log.Fatalf("環境変数が設定されていません")
+		log.Fatalf("環境変数が設定されていません (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSLMODE)")
 	}
 
-	// ★ 修正箇所: パスワードをURLエンコードする ★
-	// パスワードに含まれる可能性のある特殊文字を安全にURLに含める
+	// URI形式の接続文字列を構築
+	// パスワードをURLエンコードすることで、特殊文字を含む場合でもGormで安全に扱える
 	encodedPassword := url.QueryEscape(dbPassword)
-
-	// 接続文字列を構築
-	connStr := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+	dbURI := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s&TimeZone=Asia/Tokyo",
 		dbUser, encodedPassword, dbHost, dbPort, dbName, dbSSLMode,
 	)
 
-	// 本番時修正：詳細情報はログに出力しない
-	log.Printf("接続先: %s:%s/%s (ユーザー: %s)", dbHost, dbPort, dbName, dbUser)
-
-	ctx := context.Background()
-
-	// 接続テスト（最大30秒間リトライ）
 	maxRetries := 30
 	retryInterval := 1 * time.Second
-	var conn *pgx.Conn
+	var db *gorm.DB
 	var err error
 
+	// 接続テストと確立（リトライロジック）
 	for i := 0; i < maxRetries; i++ {
-		conn, err = pgx.Connect(ctx, connStr)
+		// Gormを使ってDB接続を試みる
+		db, err = gorm.Open(postgres.Open(dbURI), &gorm.Config{})
 		if err == nil {
-			log.Println("✓ PostgreSQLへの接続に成功しました！")
-			break
+			// 接続に成功したら、Pingで生存確認
+			sqlDB, pingErr := db.DB()
+			if pingErr == nil {
+				pingErr = sqlDB.Ping()
+			}
+
+			if pingErr == nil {
+				log.Println("✓ PostgreSQLへの接続に成功しました！")
+				break
+			}
+			err = pingErr
 		}
 
 		if i < maxRetries-1 {
@@ -62,97 +73,59 @@ func main() {
 			log.Fatalf("接続試行 %d/%d 失敗: %v", i+1, maxRetries, err)
 		}
 	}
-	defer conn.Close(ctx)
 
-	// データベース情報を取得して表示
-	var (
-		version     string
-		currentDB   string
-		currentUser string
-	)
-
-	err = conn.QueryRow(ctx, "SELECT version()").Scan(&version)
+	// データベースマイグレーション
+	// データベースが存在しない場合は自動作成される。
+	err = db.AutoMigrate(&models.User{}, &models.Task{})
 	if err != nil {
-		log.Fatalf("バージョン情報の取得に失敗しました: %v", err)
+		log.Fatalf("Failed to perform database migration: %v", err)
 	}
+	log.Println("Database migration completed.")
 
-	err = conn.QueryRow(ctx, "SELECT current_database()").Scan(&currentDB)
-	if err != nil {
-		log.Fatalf("データベース名の取得に失敗しました: %v", err)
-	}
+	return db
+}
 
-	err = conn.QueryRow(ctx, "SELECT current_user").Scan(&currentUser)
-	if err != nil {
-		log.Fatalf("ユーザー名の取得に失敗しました: %v", err)
-	}
+func main() {
 
-	log.Println("\n=== 接続情報 ===")
-	log.Printf("PostgreSQL バージョン: %s", version)
-	log.Printf("現在のデータベース: %s", currentDB)
-	log.Printf("現在のユーザー: %s", currentUser)
+	// 1. DB接続の確立とマイグレーション
+	db := setupDatabase()
 
-	// テーブル一覧を取得
-	rows, err := conn.Query(ctx, `
-		SELECT table_name 
-		FROM information_schema.tables 
-		WHERE table_schema = 'public'
-		ORDER BY table_name
-	`)
-	if err != nil {
-		log.Printf("テーブル一覧の取得に失敗しました: %v", err)
-	} else {
-		defer rows.Close()
+	// 2. 依存性の注入（DI）と各層の初期化
+	// Task Handlerを先に初期化できるように、UserとTaskの両方の依存性をここで定義
 
-		var tables []string
-		for rows.Next() {
-			var tableName string
-			if err := rows.Scan(&tableName); err != nil {
-				log.Printf("テーブル名の読み取りに失敗しました: %v", err)
-				continue
-			}
-			tables = append(tables, tableName)
-		}
+	// 認証機能の依存性
+	userRepo := repository.NewUserRepository(db)
+	authService := service.NewAuthService(userRepo)
+	authController := handler.NewAuthController(authService)
 
-		if len(tables) > 0 {
-			log.Println("\n=== テーブル一覧 ===")
-			for _, table := range tables {
-				log.Printf("  - %s", table)
-			}
-		} else {
-			log.Println("\n=== テーブル一覧 ===")
-			log.Println("  (テーブルはまだ作成されていません)")
-		}
-	}
+	// タスク管理機能の依存性
+	taskRepo := repository.NewTaskRepository(db)
+	taskService := service.NewTaskService(taskRepo)
+	taskHandler := handler.NewTaskHandler(taskService)
 
-	log.Println("\n=== 接続テスト完了 ===")
+	// 3. ルーター設定とハンドラーの紐づけ
+	r := router.SetupRouter(authController, taskHandler)
 
-	// --- ★ここから追加★ httpサーバーの起動---
-	// 💡 (1) ginルーターの初期化（ginを使用する場合）
-	r := gin.Default()
-
-	// 💡 (2) ルートパスエンドポイント（ブラウザ確認用） 20251128追加byKota
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Welcome to my-portfolio-2025 API", "environment": "production"})
-	})
-
-	// 💡 (2) ヘルスチェックエンドポイントの実装
-	// ALBターゲットグループのヘルスチェックパスである "/health" に対応
+	// ヘルスチェックエンドポイントの追加（ALB/ECS用）
 	r.GET("/health", func(c *gin.Context) {
-		// 常にHTTP 200 OKを返す
+		// DB接続もテスト
+		sqlDB, _ := db.DB()
+		if sqlDB.Ping() != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "db_connected": false})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
 	})
 
-	// 💡 (3) HTTPサーバーの起動
-	// ECSタスク定義で指定したポート (8080) でリッスンする
-	serverPort := os.Getenv("PORT") // もし環境変数PORTを使用していれば
-	if serverPort == "" {
-		serverPort = "8080" // デフォルトとして8080を使用
+	// 4. サーバー起動
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
+	serverAddr := ":" + port
 
-	log.Printf("Starting HTTP server on port %s", serverPort)
-	if err := r.Run(":" + serverPort); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+	log.Printf("Starting API server on http://localhost%s", serverAddr)
+	if err := r.Run(serverAddr); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Server stopped unexpectedly: %v", err)
 	}
-	// --- ★ここまで追加★ ---
-
 }
