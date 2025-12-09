@@ -1,0 +1,89 @@
+// internal/app/service/auth_service.go
+package service
+
+import (
+	"errors"
+	"my-portfolio-2025/internal/app/models"
+	"my-portfolio-2025/internal/app/repository"
+	"my-portfolio-2025/pkg/auth"
+
+	"gorm.io/gorm"
+)
+
+// AuthService は認証関連のビジネスロジックを定義
+// UserRepoはUserRepositoryのインスタンス
+type AuthServiceImpl struct {
+	userRepo repository.UserRepository
+}
+
+// NewAuthService は AuthService の新しいインスタンスを作成します
+func NewAuthService(userRepo repository.UserRepository) AuthService {
+	return &AuthServiceImpl{userRepo: userRepo}
+}
+
+// Signup はユーザー登録のビジネスロジックを実行します
+func (s *AuthServiceImpl) Signup(req *models.SignupRequest) (*models.User, error) {
+
+	// 1.ユーザー名の重複チェック
+	existingUser, _ := s.userRepo.FindByUsername(req.Username)
+
+	if existingUser != nil {
+		// ユーザーが存在する場合、重複エラーを返す
+		return nil, errors.New(req.Username + " is already taken") // 暫定的なエラー
+		// 実際には return nil, service.ErrUserAlreadyExists など具体的なエラーを定義して返す
+	}
+
+	// 2. パスワードのハッシュ化
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return nil, errors.New("failed to hash password")
+	}
+
+	// FindByUsername でレコード不在以外のDBエラーが発生した場合
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err // DBエラーを返す
+	}
+
+	// 3. ユーザーモデルの作成とハッシュ化パスワードの設定
+	user := &models.User{
+		Username: req.Username,
+		Password: hashedPassword, // ハッシュ化されたパスワードを格納
+	}
+
+	// 4. DBに保存
+	if err := s.userRepo.CreateUser(user); err != nil {
+		// ここでユーザー名重複エラーなどを適切に処理する（例: Gormのエラーコードで判断）
+		return nil, err // ひとまずエラーをそのまま返す
+	}
+
+	return user, nil
+}
+
+// AuthenticateUser はユーザー認証のビジネスロジックを実行します
+func (s *AuthServiceImpl) AuthenticateUser(username, password string) (*models.User, string, error) {
+	// 1. ユーザー名からユーザーを取得
+	user, err := s.userRepo.FindByUsername(username)
+	if err != nil {
+		// レコードが見つからないエラーの場合、認証失敗として扱う
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", errors.New("認証情報が正しくありません") // 認証失敗
+		}
+		return nil, "", err // その他のDBエラー
+	}
+
+	// 2. パスワード照合 (ステップ2-3)
+	// CompareHashAndPassword(保存されているハッシュ, 平文のパスワード)
+	if ok, err := auth.CheckPasswordHash(password, user.Password); !ok {
+		return nil, "", err // 認証失敗
+	}
+
+	// 3. JWT生成 (ステップ2-4)
+	token, err := auth.GenerateToken(user.ID) // auth.GenerateToken を呼び出し
+	if err != nil {
+		return nil, "", errors.New("failed to generate token")
+	}
+
+	// 成功したユーザー情報とトークンを返す
+	return user, token, nil
+
+}

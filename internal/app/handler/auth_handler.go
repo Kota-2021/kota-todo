@@ -13,7 +13,7 @@ import (
 // AuthController は認証関連のエンドポイントを処理します
 // AuthServiceはAuthServiceのインスタンス
 type AuthController struct {
-	AuthService *service.AuthService
+	AuthService service.AuthService
 }
 
 // SigninResponse: ログイン成功時に返すDTO（Data Transfer Object）
@@ -25,7 +25,7 @@ type SigninResponse struct {
 }
 
 // NewAuthController は AuthController の新しいインスタンスを作成します
-func NewAuthController(authService *service.AuthService) *AuthController {
+func NewAuthController(authService service.AuthService) *AuthController {
 	return &AuthController{AuthService: authService}
 }
 
