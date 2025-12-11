@@ -1,6 +1,5 @@
+# 20251211byKota 修正5
 name: 🚨 CI/CD Pipeline
-
-# 20251211byKota 大幅修正2
 
 on:
   ## 本番環境ではpushの3行を使用する
@@ -62,11 +61,11 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
         run: |
           echo "Applying core infrastructure: ECR and SQS..."
-          # ECR, SQSキュー、DLQを作成/更新。リソース名はご自身のinfraコードに合わせてください。
+          # リソース名をTerraformコードの定義に合わせて修正
           terraform apply -auto-approve -input=false \
             -target=aws_ecr_repository.main \
-            -target=aws_sqs_queue.task_notification_queue \
-            -target=aws_sqs_queue.task_notification_dlq
+            -target=aws_sqs_queue.main \
+            -target=aws_sqs_queue.dlq
         working-directory: ./infra
       
       # ----------------------------------------------------
