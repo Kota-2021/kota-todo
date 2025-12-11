@@ -42,7 +42,8 @@ jobs:
 
       - name: Terraform Apply (ECRのみ)
         working-directory: ./infra
-        run: terraform apply -auto-approve -target=aws_ecr_repository.main
+        # run: terraform apply -auto-approve -target=aws_ecr_repository.main
+        run: terraform apply -auto-approve -target=aws_ecr_repository.main -var="db_password=dummy"
 
 
       ############################################
