@@ -59,16 +59,3 @@ resource "aws_ecr_lifecycle_policy" "main" {
     ]
   })
 }
-
-# ----------------------------------------------------
-# 3. 出力（他リソースが利用しやすいように）
-# ----------------------------------------------------
-output "ecr_repository_url" {
-  description = "ECR repository URL for image push/pull."
-  value       = aws_ecr_repository.main.repository_url
-}
-
-output "ecr_repository_name" {
-  description = "ECR repository name."
-  value       = aws_ecr_repository.main.name
-}
