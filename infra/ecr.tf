@@ -3,20 +3,18 @@
 # ----------------------------------------------------
 # 1. ECRリポジトリ (Dockerイメージの保存先)
 # ----------------------------------------------------
-# 以下のURLを参照
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_repository
 resource "aws_ecr_repository" "main" {
   name                 = var.project_name
-  image_tag_mutability = "IMMUTABLE" # イメージタグの不変性を有効化
+  image_tag_mutability = "IMMUTABLE"
 
-  # イメージスキャン設定（セキュリティ脆弱性の自動検出）
+  # 脆弱性スキャンを push 時に実行
   image_scanning_configuration {
     scan_on_push = true
   }
 
-  # 暗号化設定
+  # AWS 管理キーによる暗号化
   encryption_configuration {
-    encryption_type = "AES256" # AWS管理キーによる暗号化
+    encryption_type = "AES256"
   }
 
   tags = {
@@ -25,10 +23,8 @@ resource "aws_ecr_repository" "main" {
 }
 
 # ----------------------------------------------------
-# 2. ECRライフサイクルポリシー (古いイメージの自動削除)
+# 2. ECR ライフサイクルポリシー（古いイメージの自動削除）
 # ----------------------------------------------------
-# 以下のURLを参照
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_lifecycle_policy
 resource "aws_ecr_lifecycle_policy" "main" {
   repository = aws_ecr_repository.main.name
 
@@ -64,3 +60,15 @@ resource "aws_ecr_lifecycle_policy" "main" {
   })
 }
 
+# ----------------------------------------------------
+# 3. 出力（他リソースが利用しやすいように）
+# ----------------------------------------------------
+output "ecr_repository_url" {
+  description = "ECR repository URL for image push/pull."
+  value       = aws_ecr_repository.main.repository_url
+}
+
+output "ecr_repository_name" {
+  description = "ECR repository name."
+  value       = aws_ecr_repository.main.name
+}
