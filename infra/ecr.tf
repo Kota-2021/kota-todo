@@ -5,6 +5,7 @@
 # ----------------------------------------------------
 resource "aws_ecr_repository" "main" {
   name                 = var.project_name
+  force_delete = true
   image_tag_mutability = "IMMUTABLE"
 
   # 脆弱性スキャンを push 時に実行
