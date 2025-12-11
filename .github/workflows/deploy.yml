@@ -100,25 +100,6 @@ jobs:
       # 【修正箇所 3】ECSサービス更新 (Terraform Plan & Apply)
       # ----------------------------------------------------
 
-      # 9.5. 【一時的なインポート/State修正】Stateの同期とクリーンアップ
-      - name: TEMP Final State Sync and Cleanup
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} 
-          
-        run: |
-          echo "Performing final state synchronization and cleanup..."
-          
-          # 🚨 1. Instance Profileのインポート (Instance Profileの衝突を解消)
-          terraform import aws_iam_instance_profile.ssm_instance my-portfolio-2025-ssm-profile
-          
-          # 🚨 2. 不要なSQSキューをStateから削除 (重複エラーを回避)
-          # 注意: これらは State から消えるだけで、AWS上には残る可能性あり。
-          terraform state rm aws_sqs_queue.task_notification_queue || echo "task_notification_queue not found in state, continuing."
-          terraform state rm aws_sqs_queue.task_notification_dlq || echo "task_notification_dlq not found in state, continuing."
-
-          echo "State manipulation complete. Applying changes."
-        working-directory: ./infra
-
       # 9. Terraform Plan の実行 (ECSタスク定義のイメージURIを更新) (元ステップ9)
       - name: Terraform Plan (Service Update)
         id: plan
