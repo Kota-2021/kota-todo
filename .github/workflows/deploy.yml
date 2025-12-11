@@ -100,6 +100,20 @@ jobs:
       # 【修正箇所 3】ECSサービス更新 (Terraform Plan & Apply)
       # ----------------------------------------------------
 
+      # 9.5. 【一時的なインポート】Stateの同期
+      - name: TEMP Import Existing Resources
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} 
+          
+        run: |
+          echo "Attempting to import remaining Instance Profile..."
+
+          # 🚨 IAM Instance Profileのインポート (今回のエラー対象)
+          terraform import aws_iam_instance_profile.ssm_instance my-portfolio-2025-ssm-profile
+
+          echo "Import complete. Re-running Terraform Plan."
+        working-directory: ./infra
+
       # 9. Terraform Plan の実行 (ECSタスク定義のイメージURIを更新) (元ステップ9)
       - name: Terraform Plan (Service Update)
         id: plan

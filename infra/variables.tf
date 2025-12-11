@@ -44,5 +44,5 @@ variable "ecs_service_desired_count" {
 variable "app_image_uri" {
   description = "ECRにプッシュされたイメージのURI"
   type        = string
-  default     = ""
+  default     = "public.ecr.aws/amazonlinux/amazon-linux-for-container:latest" // エラー回避策としてデフォルト値を追加
 }
