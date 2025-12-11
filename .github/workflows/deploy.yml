@@ -60,11 +60,7 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
         run: |
           echo "Applying core infrastructure: ECR and SQS..."
-          # リソース名をTerraformコードの定義に合わせて修正
-          terraform apply -auto-approve -input=false \
-            -target=aws_ecr_repository.main \
-            -target=aws_sqs_queue.main \
-            -target=aws_sqs_queue.dlq
+          terraform apply -auto-approve -input=false
         working-directory: ./infra
       
       # ----------------------------------------------------
