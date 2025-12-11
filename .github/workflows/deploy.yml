@@ -40,9 +40,18 @@ jobs:
         working-directory: ./infra
         run: terraform init
 
-      - name: Terraform Apply (ECRのみ)
+      - name: Check if ECR exists
+        id: check-ecr
+        run: |
+          if aws ecr describe-repositories --repository-names my-portfolio-2025 >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Terraform Apply (ECR only)
+        if: steps.check-ecr.outputs.exists == 'false'
         working-directory: ./infra
-        # run: terraform apply -auto-approve -target=aws_ecr_repository.main
         run: terraform apply -auto-approve -target=aws_ecr_repository.main -var="db_password=dummy"
 
 
