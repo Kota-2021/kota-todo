@@ -59,6 +59,8 @@ jobs:
 
         # 4. Terraform State List の実行 (★このステップを一時的に State 修正に変更します★)
       - name: TEMP Perform State Import and Cleanup
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
         run: |
           echo "Performing final state synchronization and cleanup..."
           
