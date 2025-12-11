@@ -1,4 +1,4 @@
-name: ▶️ Manual Look State Environment
+name: 👀 Manual Look State Environment
 
 on:
   workflow_dispatch: # ★手動でのみ実行可能にする★
