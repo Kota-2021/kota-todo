@@ -42,7 +42,7 @@ variable "ecs_service_desired_count" {
 
 // ECSタスク定義のイメージURI
 variable "app_image_uri" {
-  type        = string
-  nullable    = true
   description = "ECRにプッシュされたイメージのURI"
+  type        = string
+  default     = ""
 }
