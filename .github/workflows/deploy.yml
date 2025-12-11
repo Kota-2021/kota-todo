@@ -113,6 +113,7 @@ jobs:
       # run-2. イメージURIをワークフローの環境変数として保存 (Applyステップで使用するため)
       # run-3. ECSタスク定義のイメージURIを変数としてPlanに渡す
       - name: Terraform Plan
+        working-directory: ./infra
         id: plan
         env:
           # ECRプッシュステップで使用した環境変数を再利用
@@ -133,6 +134,7 @@ jobs:
 
       # 10. Terraform Apply の実行
       - name: Terraform Apply
+        working-directory: ./infra
         env:
           # Secretsを再度envに渡す
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
