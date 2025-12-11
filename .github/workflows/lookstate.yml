@@ -45,14 +45,31 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
 
       # 4. Terraform State List の実行
-      - name: List Remaining State Resources
+      # - name: List Remaining State Resources
+      #   run: |
+      #     echo "Listing resources remaining in the state file..."
+      #     echo "--------------------------------"
+      #     # state list コマンドの出力をファイルに保存
+      #     terraform state list > state_list.txt
+      #     # 結果をログに出力
+      #     cat state_list.txt
+      #     echo "--------------------------------"
+      #     echo "End of state list"
+      #   working-directory: ./infra
+
+        # 4. Terraform State List の実行 (★このステップを一時的に State 修正に変更します★)
+      - name: TEMP: Perform State Import and Cleanup
         run: |
-          echo "Listing resources remaining in the state file..."
-          echo "--------------------------------"
-          # state list コマンドの出力をファイルに保存
-          terraform state list > state_list.txt
-          # 結果をログに出力
-          cat state_list.txt
-          echo "--------------------------------"
-          echo "End of state list"
+          echo "Performing final state synchronization and cleanup..."
+          
+          # 🚨 1. Instance Profileのインポート (Instance Profileの衝突を解消)
+          # IDは AWS上のリソース名を使用
+          terraform import aws_iam_instance_profile.ssm_instance my-portfolio-2025-ssm-profile
+          
+          # 🚨 2. 不要なSQSキューをStateから削除 (Stateリストとコードの重複を解消)
+          # エラーが出ても続行できるように || true を追加
+          terraform state rm aws_sqs_queue.task_notification_queue || true
+          terraform state rm aws_sqs_queue.task_notification_dlq || true
+
+          echo "State manipulation complete. State file is now synced."
         working-directory: ./infra
