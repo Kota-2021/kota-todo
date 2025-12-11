@@ -1,5 +1,7 @@
 name: ▶️  CI/CD Pipeline
 
+# 20251211byKota 大幅修正
+
 on:
   ## 本番環境ではpushの3行を使用する
   # push:
