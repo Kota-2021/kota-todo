@@ -1,4 +1,4 @@
-name: 🚨 CI/CD Pipeline
+name: ▶️ CI/CD Pipeline
 
 on:
   ## 本番環境ではpushの3行を使用する
@@ -6,7 +6,7 @@ on:
   #   branches:
   #     - main
   ## 開発のみでは以下のworkflow_dispatchの6行を使用する
-  workflow_dispatch: # 手動実行は可能のまま
+  workflow_dispatch:
     inputs:
       confirm:
         description: 'Type "DEPLOY" to confirm the action.'
@@ -55,7 +55,7 @@ jobs:
       # 4. Terraform Apply (コアインフラ構築: ECR, SQSなど) の実行 (新規追加)
       # Docker Pushに必要なECRリポジトリと、W4-D16のタスクに必要なSQSキューを先に作成します。
       # -target は、既に存在しているリソースのエラー（前回発生したTarget Groupなどのエラー）を一時的に回避するためにも有効です。
-      - name: Terraform Apply (Core Infra: ECR, SQS)
+      - name: Terraform Apply (Core Infra ECR, SQS)
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
         run: |
