@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"my-portfolio-2025/internal/app/models"
 )
 
@@ -21,4 +22,7 @@ type TaskService interface {
 
 	// DeleteTask: タスクを削除。認可チェックのためにUserIDとTaskIDを受け取る。
 	DeleteTask(userID uint, taskID uint) error
+
+	// CheckAndQueueDeadlines: 期限切れのタスクをチェックしてSQSにキューイングする
+	CheckAndQueueDeadlines(ctx context.Context) error
 }

@@ -1,19 +1,25 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository" // Repository層をインポート
+	"time"
 )
 
 // TaskServiceImpl は TaskService インターフェースの具体的な実装です。
 type TaskServiceImpl struct {
-	taskRepo repository.TaskRepository // Repositoryへの依存性注入 (DI)
+	taskRepo      repository.TaskRepository // Repositoryへの依存性注入 (DI)
+	workerService *WorkerService            // WorkerServiceへの依存性注入 (DI)
 }
 
 // NewTaskService は TaskService の新しいインスタンスを作成します。
-func NewTaskService(repo repository.TaskRepository) TaskService {
-	return &TaskServiceImpl{taskRepo: repo}
+func NewTaskService(repo repository.TaskRepository, workerService *WorkerService) TaskService {
+	return &TaskServiceImpl{
+		taskRepo:      repo,
+		workerService: workerService,
+	}
 }
 
 // CreateTask: タスク作成のビジネスロジック
@@ -129,4 +135,19 @@ func (s *TaskServiceImpl) DeleteTask(userID uint, taskID uint) error {
 
 	// 3. 認可OK: Repositoryを呼び出して削除を実行
 	return s.taskRepo.Delete(taskID)
+}
+
+// CheckAndQueueDeadlines: 期限切れのタスクをチェックしてSQSにキューイングする
+func (s *TaskServiceImpl) CheckAndQueueDeadlines(ctx context.Context) error {
+	// 1時間以内に期限が来るタスクを取得する
+	tasks, err := s.taskRepo.FindUpcomingTasks(ctx, time.Now().Add(1*time.Hour))
+	if err != nil {
+		return err
+	}
+
+	for _, task := range tasks {
+		// SQSにジョブを投入
+		s.workerService.SendTaskNotification(ctx, task.ID, "期限が近づいています")
+	}
+	return nil
 }

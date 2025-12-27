@@ -25,7 +25,7 @@ func (s *TaskTestSuite) SetupTest() {
 	// 1. モックの初期化
 	s.mockTaskRepo = new(mock.MockTaskRepository)
 	// 2. サービスの実装にモックと設定を注入
-	s.taskService = NewTaskService(s.mockTaskRepo)
+	s.taskService = NewTaskService(s.mockTaskRepo, nil)
 }
 
 // TestTaskServiceSuite はテストスイートを実行します

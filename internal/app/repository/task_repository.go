@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"context"
 	"my-portfolio-2025/internal/app/models" // Taskモデルをインポート
+	"time"
 )
 
 // TaskRepository はTaskモデルのデータ永続化（CRUD）操作を抽象化します。
@@ -21,4 +23,7 @@ type TaskRepository interface {
 
 	// Delete (削除)
 	Delete(taskID uint) error
+
+	// FindUpcomingTasks: 指定した日付より前の期限のタスクを取得 (期限切れチェック用)
+	FindUpcomingTasks(ctx context.Context, threshold time.Time) ([]models.Task, error)
 }

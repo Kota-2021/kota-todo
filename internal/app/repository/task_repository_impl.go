@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"context"
 	"my-portfolio-2025/internal/app/models"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -71,4 +73,23 @@ func (r *taskRepositoryImpl) Delete(taskID uint) error {
 	// 通常はソフトデリートが推奨されます。
 	result := r.db.Delete(&models.Task{}, taskID)
 	return result.Error
+}
+
+// FindUpcomingTasks: 指定した日付より前の期限のタスクを取得 (期限切れチェック用)
+func (r *taskRepositoryImpl) FindUpcomingTasks(ctx context.Context, threshold time.Time) ([]models.Task, error) {
+	var tasks []models.Task
+	// 条件:
+	// 1. 期限 (due_date) が現在時刻より後
+	// 2. 期限 (due_date) が threshold (1時間後など) より前
+	// 3. まだ完了していない (status != 'completed')
+	// 4. (オプション) すでに通知済みのものは除外するロジックがあればここに追加
+
+	err := r.db.WithContext(ctx).
+		Where("due_date > ? AND due_date <= ? AND status != ?", time.Now(), threshold, "completed").
+		Find(&tasks).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }

@@ -2,7 +2,9 @@
 package mock
 
 import (
+	"context"
 	"my-portfolio-2025/internal/app/models" // モデルパッケージへのパスは適宜修正してください
+	"time"
 
 	"github.com/stretchr/testify/mock"
 )
@@ -72,4 +74,15 @@ func (m *MockTaskRepository) Delete(taskID uint) error {
 	// }
 
 	return args.Error(0)
+}
+
+// MockTaskRepository 構造体にメソッドを追加
+func (m *MockTaskRepository) FindUpcomingTasks(ctx context.Context, threshold time.Time) ([]models.Task, error) {
+	args := m.Called(ctx, threshold)
+
+	// args.Get(0) を []models.Task 型にキャストして返す
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Task), args.Error(1)
 }
