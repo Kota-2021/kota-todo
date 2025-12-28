@@ -30,7 +30,7 @@ func (s *TaskServiceImpl) CreateTask(userID uint, req *models.TaskCreateRequest)
 		Title:       req.Title,
 		Description: req.Description,
 		DueDate:     req.DueDate,
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 
 	// 2. Repositoryを呼び出し、DBに保存
@@ -103,8 +103,8 @@ func (s *TaskServiceImpl) UpdateTask(userID uint, taskID uint, req *models.TaskU
 	if req.DueDate != nil {
 		task.DueDate = *req.DueDate
 	}
-	if req.IsCompleted != nil {
-		task.IsCompleted = *req.IsCompleted
+	if req.Status != nil {
+		task.Status = *req.Status
 	}
 
 	// 4. Repositoryを呼び出し、DBを更新

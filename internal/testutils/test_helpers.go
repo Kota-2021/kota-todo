@@ -8,9 +8,8 @@ import (
 	// JWTやハッシュ化に使用するライブラリをインポート
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
-
-// ... 関数の実装をここに記述 ...
 
 type TestClaims struct {
 	UserID uint `json:"user_id"`
@@ -34,7 +33,7 @@ var GlobalTestConfig = &TestConfig{
 // CreateTestUser はテスト用のダミーユーザーインスタンスを返します
 func CreateTestUser(id uint, username string, hashedPassword string) *models.User {
 	return &models.User{
-		ID:        id,
+		Model:     gorm.Model{ID: id},
 		Username:  username,
 		Password:  hashedPassword, // ハッシュ済みのパスワードを設定
 		CreatedAt: time.Now(),

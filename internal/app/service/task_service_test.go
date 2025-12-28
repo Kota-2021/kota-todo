@@ -84,7 +84,7 @@ func (s *TaskTestSuite) TestGetTaskByID_Success() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 
 	// 2. モックの期待値設定
@@ -115,7 +115,7 @@ func (s *TaskTestSuite) TestGetTasks_Success() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 	tasks := []models.Task{*task}
 
@@ -173,17 +173,17 @@ func (s *TaskTestSuite) TestUpdateTask_Success() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 	title := "Updated Test Task"
 	description := "This is an updated test task"
 	dueDate := time.Now().Add(time.Hour * 24)
-	isCompleted := true
+	status := models.TaskStatusInProgress
 	req := &models.TaskUpdateRequest{
 		Title:       &title,
 		Description: &description,
 		DueDate:     &dueDate,
-		IsCompleted: &isCompleted,
+		Status:      &status,
 	}
 
 	// 2. モックの期待値設定
@@ -215,7 +215,7 @@ func (s *TaskTestSuite) TestDeleteTask_Success() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 
 	// 2. モックの期待値設定
@@ -248,7 +248,7 @@ func (s *TaskTestSuite) TestGetTaskByID_Authorization() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 
 	// 2. モックの期待値設定
@@ -280,19 +280,19 @@ func (s *TaskTestSuite) TestUpdateTask_Authorization() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 
 	// 更新リクエストデータ（内容は更新されないことを検証）
 	title := "Updated Test Task"
 	description := "This is an updated test task"
 	dueDate := time.Now().Add(time.Hour * 24)
-	isCompleted := true
+	status := models.TaskStatusInProgress
 	req := &models.TaskUpdateRequest{
 		Title:       &title,
 		Description: &description,
 		DueDate:     &dueDate,
-		IsCompleted: &isCompleted,
+		Status:      &status,
 	}
 
 	// 2. モックの期待値設定
@@ -331,7 +331,7 @@ func (s *TaskTestSuite) TestDeleteTask_Authorization() {
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
-		IsCompleted: false,
+		Status:      models.TaskStatusPending,
 	}
 
 	// 2. モックの期待値設定

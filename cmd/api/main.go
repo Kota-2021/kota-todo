@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"my-portfolio-2025/internal/app/repository"
 	"my-portfolio-2025/internal/app/router"
 	"my-portfolio-2025/internal/app/service"
+	"my-portfolio-2025/internal/infrastructure/aws"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -90,8 +92,31 @@ func main() {
 	// 1. DB接続の確立とマイグレーション
 	db := setupDatabase()
 
+	// --- 基盤となる Context の生成 ---
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// SQSクライアントの初期化
+	region := os.Getenv("AWS_REGION")
+	queueURL := os.Getenv("SQS_QUEUE_URL")
+	if region == "" || queueURL == "" {
+		log.Println("Warning: AWS_REGION or SQS_QUEUE_URL is not set. Worker may not function correctly.")
+	}
+
 	// 2. 依存性の注入（DI）と各層の初期化
 	// Task Handlerを先に初期化できるように、UserとTaskの両方の依存性をここで定義
+
+	// --- 追加: SQS/Worker 関連の初期化 ---
+	// 環境変数からキュー名を取得 (例: "my-portfolio-queue")
+	queueName := os.Getenv("SQS_QUEUE_NAME")
+
+	// --- 非同期ワーカーの依存性 ---
+	// SQSクライアントを初期化
+	sqsClient, err := aws.NewSQSClient(ctx, queueName)
+	if err != nil {
+		log.Printf("SQS初期化失敗: %v", err)
+		// 本番環境では Fatalf にする検討も必要ですが、まずは実行を優先
+	}
 
 	// 認証機能の依存性
 	userRepo := repository.NewUserRepository(db)
@@ -100,7 +125,11 @@ func main() {
 
 	// タスク管理機能の依存性
 	taskRepo := repository.NewTaskRepository(db)
-	taskService := service.NewTaskService(taskRepo)
+
+	// WorkerService を初期化 (taskRepoを渡すことで、二重送信防止の更新を可能にする)
+	workerService := service.NewWorkerService(sqsClient, taskRepo)
+
+	taskService := service.NewTaskService(taskRepo, workerService)
 	taskHandler := handler.NewTaskHandler(taskService)
 
 	// 3. ルーター設定とハンドラーの紐づけ
@@ -116,6 +145,19 @@ func main() {
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
 	})
+
+	// --- 追加: 非同期ワーカーの起動 ---
+	// サーバー起動 (r.Run) の前に Go ルーチンで走らせる
+	if sqsClient != nil {
+
+		// A: SQSからメッセージを受信して処理する側
+		go workerService.StartWorker(ctx)
+
+		// B: DBを監視して期限間近なタスクをSQSへ送る側 (二重送信防止ロジックを含む)
+		go workerService.StartTaskWatcher(ctx)
+
+		log.Println("✓ Background workers started (Watcher & Worker)")
+	}
 
 	// 4. サーバー起動
 	port := os.Getenv("PORT")

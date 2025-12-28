@@ -86,3 +86,11 @@ func (m *MockTaskRepository) FindUpcomingTasks(ctx context.Context, threshold ti
 	}
 	return args.Get(0).([]models.Task), args.Error(1)
 }
+
+// UpdateLastNotifiedAt は TaskRepository.UpdateLastNotifiedAt のモック実装です
+func (m *MockTaskRepository) UpdateLastNotifiedAt(ctx context.Context, taskID uint, notifiedAt time.Time) error {
+	// テスト時に呼び出しを記録したり、エラーをシミュレートしたりするためのロジック
+	// testify/mock を使っている場合は以下のように記述
+	args := m.Called(ctx, taskID, notifiedAt)
+	return args.Error(0)
+}
