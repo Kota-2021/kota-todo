@@ -147,7 +147,7 @@ func (s *TaskServiceImpl) CheckAndQueueDeadlines(ctx context.Context) error {
 
 	for _, task := range tasks {
 		// SQSにジョブを投入
-		s.workerService.SendTaskNotification(ctx, task.ID, "期限が近づいています")
+		s.workerService.SendTaskNotification(ctx, task.ID, task.UserID, "期限が近づいています")
 	}
 	return nil
 }

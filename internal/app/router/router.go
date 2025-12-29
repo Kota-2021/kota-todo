@@ -14,6 +14,7 @@ import (
 func SetupRouter(
 	authController *handler.AuthController,
 	taskHandler *handler.TaskHandler,
+	notificationHandler *handler.NotificationHandler,
 ) *gin.Engine {
 
 	r := gin.Default()
@@ -45,6 +46,10 @@ func SetupRouter(
 
 		// 4.9 Delete (DELETE /tasks/:id)
 		tasks.DELETE("/:id", taskHandler.DeleteTask)
+
+		// WebSocket エンドポイント
+		// 本来は authMiddleware.Middleware() 等で保護し、userIDをコンテキストに入れるのが理想です
+		r.GET("/ws", notificationHandler.HandleWS)
 	}
 
 	return r

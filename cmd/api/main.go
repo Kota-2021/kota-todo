@@ -96,6 +96,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// --- NotificationHub の初期化 ---
+	hub := service.NewNotificationHub()
+	go hub.Run() // Hubのイベントループをバックグラウンドで開始
+
 	// SQSクライアントの初期化
 	region := os.Getenv("AWS_REGION")
 	queueURL := os.Getenv("SQS_QUEUE_URL")
@@ -127,13 +131,16 @@ func main() {
 	taskRepo := repository.NewTaskRepository(db)
 
 	// WorkerService を初期化 (taskRepoを渡すことで、二重送信防止の更新を可能にする)
-	workerService := service.NewWorkerService(sqsClient, taskRepo)
-
+	workerService := service.NewWorkerService(sqsClient, taskRepo, hub)
+	// workerService := service.NewWorkerService(sqsClient, taskRepo)
 	taskService := service.NewTaskService(taskRepo, workerService)
 	taskHandler := handler.NewTaskHandler(taskService)
 
+	// NotificationHandler の初期化
+	notificationHandler := handler.NewNotificationHandler(hub)
+
 	// 3. ルーター設定とハンドラーの紐づけ
-	r := router.SetupRouter(authController, taskHandler)
+	r := router.SetupRouter(authController, taskHandler, notificationHandler)
 
 	// ヘルスチェックエンドポイントの追加（ALB/ECS用）
 	r.GET("/health", func(c *gin.Context) {

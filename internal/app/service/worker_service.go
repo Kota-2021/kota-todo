@@ -15,18 +15,23 @@ import (
 )
 
 type WorkerService struct {
+	// SQSクライアント
 	sqsClient *aws.SQSClient
-	taskRepo  repository.TaskRepository
+	// タスク管理リポジトリ
+	taskRepo repository.TaskRepository
+	// Hubを依存注入(DI)できるように追加
+	hub *NotificationHub
 }
 
-func NewWorkerService(sqsClient *aws.SQSClient, taskRepo repository.TaskRepository) *WorkerService {
-	return &WorkerService{sqsClient: sqsClient, taskRepo: taskRepo}
+func NewWorkerService(sqsClient *aws.SQSClient, taskRepo repository.TaskRepository, hub *NotificationHub) *WorkerService {
+	return &WorkerService{sqsClient: sqsClient, taskRepo: taskRepo, hub: hub}
 }
 
 // SendTaskNotification はタスク情報をSQSに送信します
-func (s *WorkerService) SendTaskNotification(ctx context.Context, taskID uint, message string) error {
+func (s *WorkerService) SendTaskNotification(ctx context.Context, taskID uint, userID uint, message string) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"task_id": taskID,
+		"user_id": userID,
 		"message": message,
 	})
 
@@ -72,8 +77,19 @@ func (s *WorkerService) StartWorker(ctx context.Context) {
 			}
 
 			for _, msg := range output.Messages {
-				// ここで通知処理（後のW4-D17でのWebSocket連携等）を呼び出す
 				log.Printf("Processing message: %s", *msg.Body)
+
+				// --- WebSocket連携 ---
+				// 1. SQSから届いたJSONを構造体にデコード
+				var notifyData NotificationMessage
+				if err := json.Unmarshal([]byte(*msg.Body), &notifyData); err != nil {
+					log.Printf("Failed to unmarshal SQS message: %v", err)
+					// 解析に失敗した場合は削除して良いか検討が必要。
+					// 開発の現段階では一旦ログを出してスキップします
+				} else {
+					// 2. Hubのチャネルにメッセージを送信（ここでWebSocket配信が実行される）
+					s.hub.Broadcast <- &notifyData
+				}
 
 				// 処理成功後にメッセージを削除（重要！）
 				_, err := s.sqsClient.Client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
@@ -120,7 +136,7 @@ func (s *WorkerService) StartTaskWatcher(ctx context.Context) {
 					task.Title, task.DueDate.Format("15:04"))
 
 				// SendTaskNotification 内で SQS送信 ＋ DBの更新が行われる
-				err := s.SendTaskNotification(ctx, task.ID, message)
+				err := s.SendTaskNotification(ctx, task.ID, task.UserID, message)
 				if err != nil {
 					log.Printf("Failed to send notification for task %d: %v", task.ID, err)
 				} else {
