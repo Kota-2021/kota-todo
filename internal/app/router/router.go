@@ -26,6 +26,8 @@ func SetupRouter(
 		public.POST("/signin", authController.Signin) // ログイン（JWT発行）
 	}
 
+	r.GET("/ws", notificationHandler.HandleWS)
+
 	// --- 認証必須のプライベートルート /tasks ---
 	// .Use(middleware.AuthMiddleware()) を使ってミドルウェアを適用します。
 	tasks := r.Group("/tasks")
@@ -49,7 +51,7 @@ func SetupRouter(
 
 		// WebSocket エンドポイント
 		// 本来は authMiddleware.Middleware() 等で保護し、userIDをコンテキストに入れるのが理想です
-		r.GET("/ws", notificationHandler.HandleWS)
+		// r.GET("/ws", notificationHandler.HandleWS)
 	}
 
 	return r

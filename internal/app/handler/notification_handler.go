@@ -32,40 +32,42 @@ func NewNotificationHandler(hub *service.NotificationHub) *NotificationHandler {
 
 // HandleWS WebSocket接続の受付
 func (h *NotificationHandler) HandleWS(c *gin.Context) {
-	// 1. JWT等からユーザーIDを取得（W3-D13で実装した認証を利用）
-	// userID, exists := c.Get("userID")
-	// if !exists {
-	//     c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-	//     return
-	// }
+	log.Println("--- WebSocket ハンドシェイク開始 ---")
 
-	// 2. HTTPをWebSocketへアップグレード
+	// 1. HTTPをWebSocketへアップグレード
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("Failed to upgrade connection: %v", err)
+		log.Printf("WebSocketアップグレード失敗: %v", err)
 		return
 	}
+	log.Println("WebSocketアップグレード成功")
 
-	// ユーザーIDを取得 (JWT等から)
-	userID := uint(1) // 本来は authMiddleware 等から取得
+	// **テスト用にユーザーIDを固定（UserID: 1）**
+	userID := uint(1)
 
-	// Hubに登録依頼を出す
+	// 2. Hubに登録
 	h.hub.Register <- &service.ClientRegistration{
 		UserID: userID,
 		Conn:   conn,
 	}
+	log.Printf("ユーザー %d が Hub に登録されました", userID)
 
-	// 切断時はHubに解除依頼を出す
+	// 切断時の処理
 	defer func() {
 		h.hub.Unregister <- userID
+		log.Printf("ユーザー %d の接続が終了しました", userID)
+		conn.Close()
 	}()
 
-	// 接続を維持するために、クライアントからの読み取りループを回す
-	// (これがないと関数が終了して defer で切断されてしまいます)
+	// 3. 読み取りループ（これがないと即座に終了してしまいます）
+	log.Println("クライアントからのメッセージ待機中...")
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
+		// クライアントが切断するか、エラーが発生するまでここで待機
+		messageType, p, err := conn.ReadMessage()
+		if err != nil {
+			log.Printf("接続終了 (ReadMessage): %v", err)
 			break
 		}
+		log.Printf("📩 メッセージ受信: type=%d, payload=%s", messageType, string(p))
 	}
-
 }

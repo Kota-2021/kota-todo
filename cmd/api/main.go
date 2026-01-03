@@ -15,8 +15,10 @@ import (
 	"my-portfolio-2025/internal/app/router"
 	"my-portfolio-2025/internal/app/service"
 	"my-portfolio-2025/internal/infrastructure/aws"
+	"my-portfolio-2025/internal/infrastructure/redis"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -24,6 +26,18 @@ import (
 // setupDatabase はDB接続の確立、テスト、マイグレーションを行います
 func setupDatabase() *gorm.DB {
 	log.Println("=== データベース接続開始 ===")
+
+	// ローカルでの開発用.envファイルの読み込み
+	currentPath, errEnv := os.Getwd()
+	if errEnv != nil {
+		log.Fatal("Error getting current path")
+	}
+	envFilePath := currentPath + "/.env"
+	errEnv = godotenv.Load(envFilePath)
+	if errEnv != nil {
+		log.Fatal("Error loading .env file")
+	}
+	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
 
 	// 環境変数から接続情報を取得
 	dbHost := os.Getenv("DB_HOST")
@@ -96,11 +110,27 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// --- NotificationHub の初期化 ---
-	hub := service.NewNotificationHub()
-	go hub.Run() // Hubのイベントループをバックグラウンドで開始
+	// --- Redisクライアントの初期化 ---
+	rdb := redis.NewRedisClient()
+
+	// --- NotificationHub の初期化 (Redisクライアントを渡す) ---
+	hub := service.NewNotificationHub(rdb)
+
+	go hub.Run()               // Hubのイベントループを開始
+	go hub.SubscribeRedis(ctx) // Redisの購読ループをバックグラウンドで開始
 
 	// SQSクライアントの初期化
+	// ローカルでの開発用.envファイルの読み込み
+	currentPath, err := os.Getwd()
+	if err != nil {
+		log.Fatal("Error getting current path")
+	}
+	envFilePath := currentPath + "/.env"
+	err = godotenv.Load(envFilePath)
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
 	region := os.Getenv("AWS_REGION")
 	queueURL := os.Getenv("SQS_QUEUE_URL")
 	if region == "" || queueURL == "" {
@@ -153,7 +183,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
 	})
 
-	// --- 追加: 非同期ワーカーの起動 ---
+	// --- 非同期ワーカーの起動 ---
 	// サーバー起動 (r.Run) の前に Go ルーチンで走らせる
 	if sqsClient != nil {
 
