@@ -7,6 +7,7 @@ import (
 )
 
 // Notification は通知情報を表すモデルです
+// DB保存用モデル
 type Notification struct {
 	ID        uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
@@ -15,4 +16,12 @@ type Notification struct {
 	Message   string     `gorm:"type:text;not null" json:"message"`
 	IsRead    bool       `gorm:"not null;default:false" json:"is_read"`
 	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
+}
+
+// 配信（WebSocket/Redis）用
+type NotificationMessage struct {
+	ID      uuid.UUID `json:"id"`
+	UserID  uuid.UUID `json:"user_id"`
+	Type    string    `json:"type"`
+	Message string    `json:"message"`
 }

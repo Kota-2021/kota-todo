@@ -9,12 +9,12 @@ import (
 
 type NotificationService interface {
 
-	// GetNotifications (ユーザーの通知を10件ずつ取得)
+	// Create は新しい通知をDBに保存します (WorkerServiceから呼ばれます)
+	Create(ctx context.Context, notification *models.Notification) error
+
+	// GetNotifications はユーザーの通知をページネーション付きで取得します
 	GetNotifications(ctx context.Context, userID uuid.UUID, page int) ([]models.Notification, error)
 
-	// MarkAsRead (指定された通知を既読にします)
+	// MarkAsRead は指定された通知を既読にします
 	MarkAsRead(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
-
-	// 今後、SQSワーカーから呼ばれる「保存用メソッド」もここに追加予定です
-
 }

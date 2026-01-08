@@ -5,10 +5,10 @@ import (
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/service" // Service層をインポート
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // TaskHandler はタスク関連のHTTPリクエストを処理します。
@@ -24,14 +24,14 @@ func NewTaskHandler(s service.TaskService) *TaskHandler {
 
 // ユーザーID取得ヘルパー関数 (重要！)
 // JWTミドルウェアで c.Set("userID", userID) された値を取得します。
-func getUserIDFromContext(c *gin.Context) uint {
+func getUserIDFromContext(c *gin.Context) uuid.UUID {
 	// c.MustGetは値が設定されていない場合にパニックを引き起こしますが、
 	// AuthMiddlewareが先に実行されるため、安全に利用できます。
 	// MustGetの結果はinterface{}型なので、uint型にキャストが必要です。
-	userID, ok := c.MustGet("userID").(uint)
+	userID, ok := c.MustGet("userID").(uuid.UUID)
 	if !ok {
 		// 通常はAuthMiddlewareで止まるため、ここは発生しない想定だが、念のためログ出力やエラー処理を検討
-		return 0
+		return uuid.Nil
 	}
 	return userID
 }
@@ -40,7 +40,7 @@ func getUserIDFromContext(c *gin.Context) uint {
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	// 1. JWTミドルウェアから認証済みユーザーIDを取得 (最も重要)
 	userID := getUserIDFromContext(c)
-	if userID == 0 {
+	if userID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
 		return
 	}
@@ -71,7 +71,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 func (h *TaskHandler) GetTasks(c *gin.Context) {
 	// 1. JWTミドルウェアから認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == 0 {
+	if userID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
 		return
 	}
@@ -94,21 +94,21 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 	// 1. JWTミドルウェアから認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == 0 {
+	if userID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
 		return
 	}
 
 	// 2. URLパスパラメータからタスクIDを取得
 	taskIDStr := c.Param("id")
-	taskID, err := strconv.ParseUint(taskIDStr, 10, 64) // stringをuintに変換
+	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
 		return
 	}
 
 	// 3. Service層を呼び出し、タスクを取得（Service層で認可チェックが行われる）
-	task, err := h.taskService.GetTaskByID(userID, uint(taskID))
+	task, err := h.taskService.GetTaskByID(userID, taskID)
 
 	// 4. エラー処理
 	if err != nil {
@@ -135,14 +135,14 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	// 1. 認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == 0 {
+	if userID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
 		return
 	}
 
 	// 2. URLパスパラメータからタスクIDを取得
 	taskIDStr := c.Param("id")
-	taskID, err := strconv.ParseUint(taskIDStr, 10, 64)
+	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
 		return
@@ -158,7 +158,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	}
 
 	// 4. Service層を呼び出し（Service層で認可と更新処理が行われる）
-	updatedTask, err := h.taskService.UpdateTask(userID, uint(taskID), &req)
+	updatedTask, err := h.taskService.UpdateTask(userID, taskID, &req)
 
 	// 5. エラー処理
 	if err != nil {
@@ -182,21 +182,21 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	// 1. 認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == 0 {
+	if userID == uuid.Nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
 		return
 	}
 
 	// 2. URLパスパラメータからタスクIDを取得
 	taskIDStr := c.Param("id")
-	taskID, err := strconv.ParseUint(taskIDStr, 10, 64)
+	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
 		return
 	}
 
 	// 3. Service層を呼び出し（Service層で認可と削除処理が行われる）
-	err = h.taskService.DeleteTask(userID, uint(taskID))
+	err = h.taskService.DeleteTask(userID, taskID)
 
 	// 4. エラー処理
 	if err != nil {

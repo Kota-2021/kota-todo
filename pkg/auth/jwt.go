@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // JWT_SECRET は環境変数などから取得する（セキュリティ上の重要項目）
@@ -15,12 +16,12 @@ const JWT_SECRET = "YOUR_SUPER_SECRET_KEY_MUST_BE_SECURELY_MANAGED"
 
 // Claims はJWTのペイロードを定義
 type Claims struct {
-	UserID uint `json:"user_id"`
+	UserID uuid.UUID `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken は指定されたユーザーIDのJWTを生成します
-func GenerateToken(userID uint) (string, error) {
+func GenerateToken(userID uuid.UUID) (string, error) {
 	// 1. 有効期限を設定 (例: 7日間)
 	expirationTime := time.Now().Add(7 * 24 * time.Hour)
 
@@ -45,7 +46,7 @@ func GenerateToken(userID uint) (string, error) {
 }
 
 // ValidateToken はJWT文字列を受け取り、検証してUserIDを返します。
-func ValidateToken(tokenString string) (uint, error) {
+func ValidateToken(tokenString string) (uuid.UUID, error) {
 	// トークンのパースと検証
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		// トークンの署名アルゴリズムが想定通りかチェック
@@ -58,21 +59,21 @@ func ValidateToken(tokenString string) (uint, error) {
 
 	if err != nil {
 		// トークンの検証失敗 (署名無効、期限切れ、不正な形式など)
-		return 0, fmt.Errorf("token validation failed: %w", err)
+		return uuid.Nil, fmt.Errorf("token validation failed: %w", err)
 	}
 
 	// 検証に成功した場合、クレームを取得
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		// クレームの型変換失敗、またはトークンが有効でない
-		return 0, fmt.Errorf("invalid token claims or not valid")
+		return uuid.Nil, fmt.Errorf("invalid token claims or not valid")
 	}
 
 	// 期限切れチェック (ParseWithClaimsが通常処理しますが、念のため手動チェックも可能)
 	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
-		return 0, fmt.Errorf("token expired")
+		return uuid.Nil, fmt.Errorf("token expired")
 	}
 
 	// 成功: 抽出したUserIDを返却
-	return claims.UserID, nil
+	return claims.UserID, nil // uuid.UUID型を返却
 }

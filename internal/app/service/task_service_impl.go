@@ -6,6 +6,8 @@ import (
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository" // Repository層をインポート
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // TaskServiceImpl は TaskService インターフェースの具体的な実装です。
@@ -23,7 +25,7 @@ func NewTaskService(repo repository.TaskRepository, workerService *WorkerService
 }
 
 // CreateTask: タスク作成のビジネスロジック
-func (s *TaskServiceImpl) CreateTask(userID uint, req *models.TaskCreateRequest) (*models.Task, error) {
+func (s *TaskServiceImpl) CreateTask(userID uuid.UUID, req *models.TaskCreateRequest) (*models.Task, error) {
 	// 1. DTOからModelへの変換とUserIDのセット
 	task := &models.Task{
 		UserID:      userID, // JWTミドルウェアから渡されたUserIDを設定
@@ -42,7 +44,7 @@ func (s *TaskServiceImpl) CreateTask(userID uint, req *models.TaskCreateRequest)
 }
 
 // GetTaskByID: タスク詳細取得のビジネスロジックと認可チェック
-func (s *TaskServiceImpl) GetTaskByID(userID uint, taskID uint) (*models.Task, error) {
+func (s *TaskServiceImpl) GetTaskByID(userID uuid.UUID, taskID uuid.UUID) (*models.Task, error) {
 	// 1. Repositoryを呼び出し、タスクを検索
 	task, err := s.taskRepo.FindByID(taskID)
 	if err != nil {
@@ -63,7 +65,7 @@ func (s *TaskServiceImpl) GetTaskByID(userID uint, taskID uint) (*models.Task, e
 }
 
 // GetTasks: 特定のユーザーのタスクリストを取得。
-func (s *TaskServiceImpl) GetTasks(userID uint) ([]models.Task, error) {
+func (s *TaskServiceImpl) GetTasks(userID uuid.UUID) ([]models.Task, error) {
 	// 認可チェックはRepository層のFindAllByUserIDに委譲（UserIDでフィルタリングされるため）
 	// Service層の役割はシンプルにRepositoryを呼び出すこと
 	tasks, err := s.taskRepo.FindAllByUserID(userID)
@@ -77,7 +79,7 @@ func (s *TaskServiceImpl) GetTasks(userID uint) ([]models.Task, error) {
 }
 
 // UpdateTask: タスクの更新と認可チェック
-func (s *TaskServiceImpl) UpdateTask(userID uint, taskID uint, req *models.TaskUpdateRequest) (*models.Task, error) {
+func (s *TaskServiceImpl) UpdateTask(userID uuid.UUID, taskID uuid.UUID, req *models.TaskUpdateRequest) (*models.Task, error) {
 	// 1. タスクの存在確認と認可チェック（GetTaskByIDと同様の処理が必要）
 	task, err := s.taskRepo.FindByID(taskID)
 	if err != nil {
@@ -117,7 +119,7 @@ func (s *TaskServiceImpl) UpdateTask(userID uint, taskID uint, req *models.TaskU
 }
 
 // DeleteTask: タスクを削除します。認可チェックが必須です。
-func (s *TaskServiceImpl) DeleteTask(userID uint, taskID uint) error {
+func (s *TaskServiceImpl) DeleteTask(userID uuid.UUID, taskID uuid.UUID) error {
 	// 1. 認可チェックのためにタスクを取得
 	task, err := s.taskRepo.FindByID(taskID)
 	if err != nil {

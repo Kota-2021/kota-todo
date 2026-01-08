@@ -5,6 +5,7 @@ import (
 	"my-portfolio-2025/internal/app/models"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +27,7 @@ func (r *taskRepositoryImpl) Create(task *models.Task) error {
 }
 
 // FindAllByUserID: 特定のユーザーIDに紐づく全てのタスクをリストで取得します。
-func (r *taskRepositoryImpl) FindAllByUserID(userID uint) ([]models.Task, error) {
+func (r *taskRepositoryImpl) FindAllByUserID(userID uuid.UUID) ([]models.Task, error) {
 	var tasks []models.Task
 	// Where条件を使って、UserIDが一致するレコードのみをフィルタリングします。
 	result := r.db.Where("user_id = ?", userID).Find(&tasks)
@@ -43,7 +44,7 @@ func (r *taskRepositoryImpl) FindAllByUserID(userID uint) ([]models.Task, error)
 }
 
 // FindByID: IDでタスクを検索します。（認可チェックはService層で行うため、ここでは単純に検索します）
-func (r *taskRepositoryImpl) FindByID(taskID uint) (*models.Task, error) {
+func (r *taskRepositoryImpl) FindByID(taskID uuid.UUID) (*models.Task, error) {
 	var task models.Task
 	// Firstは主キーでレコードを検索します。
 	result := r.db.First(&task, taskID)
@@ -66,7 +67,7 @@ func (r *taskRepositoryImpl) Update(task *models.Task) error {
 }
 
 // Delete: IDを指定してタスクを削除します。
-func (r *taskRepositoryImpl) Delete(taskID uint) error {
+func (r *taskRepositoryImpl) Delete(taskID uuid.UUID) error {
 	// GormのDeleteメソッドを呼び出す。
 	// models.Taskがgorm.Modelを含んでいるため、これはデフォルトでソフトデリート（論理削除）になります。
 	// 物理削除したい場合は、r.db.Unscoped().Delete(...) を使用する必要がありますが、
@@ -90,6 +91,6 @@ func (r *taskRepositoryImpl) FindUpcomingTasks(ctx context.Context, threshold ti
 }
 
 // UpdateLastNotifiedAt: 通知完了時刻を更新する
-func (r *taskRepositoryImpl) UpdateLastNotifiedAt(ctx context.Context, taskID uint, notifiedAt time.Time) error {
+func (r *taskRepositoryImpl) UpdateLastNotifiedAt(ctx context.Context, taskID uuid.UUID, notifiedAt time.Time) error {
 	return r.db.WithContext(ctx).Model(&models.Task{}).Where("id = ?", taskID).Update("last_notified_at", notifiedAt).Error
 }

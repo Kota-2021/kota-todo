@@ -4,16 +4,19 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // User はデータベースの users テーブルに対応する構造体
 type User struct {
-	gorm.Model           // ID, CreatedAt, UpdatedAt, DeletedAt を自動で追加
-	Username   string    `gorm:"unique;not null" json:"username"` // 一意性とNOT NULL制約
-	Password   string    `gorm:"not null" json:"-"`               // ハッシュ化されたパスワード。レスポンスには含めないため `json:"-"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	// gorm.Model           // ID, CreatedAt, UpdatedAt, DeletedAt を自動で追加
+	ID        uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
+	Username  string         `gorm:"unique;not null" json:"username"` // 一意性とNOT NULL制約
+	Password  string         `gorm:"not null" json:"-"`               // ハッシュ化されたパスワード。レスポンスには含めないため `json:"-"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // SignupRequest はユーザー登録時にクライアントから受け取るデータ
@@ -26,4 +29,12 @@ type SignupRequest struct {
 type SigninRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+// BeforeCreate GORMフックで作成時にUUIDを自動生成
+func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
+	if u.ID == uuid.Nil {
+		u.ID = uuid.New()
+	}
+	return
 }

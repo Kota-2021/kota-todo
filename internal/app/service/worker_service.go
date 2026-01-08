@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository"
 	"my-portfolio-2025/internal/infrastructure/aws"
 	"time"
 
 	awsgo "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/google/uuid"
 	// "github.com/aws/aws-sdk-go-v2/aws" as awsgo
 )
 
@@ -19,16 +21,18 @@ type WorkerService struct {
 	sqsClient *aws.SQSClient
 	// タスク管理リポジトリ
 	taskRepo repository.TaskRepository
+	// 通知管理機能
+	notiService NotificationService
 	// Hubを依存注入(DI)できるように追加
 	hub *NotificationHub
 }
 
-func NewWorkerService(sqsClient *aws.SQSClient, taskRepo repository.TaskRepository, hub *NotificationHub) *WorkerService {
-	return &WorkerService{sqsClient: sqsClient, taskRepo: taskRepo, hub: hub}
+func NewWorkerService(sqsClient *aws.SQSClient, taskRepo repository.TaskRepository, notiService NotificationService, hub *NotificationHub) *WorkerService {
+	return &WorkerService{sqsClient: sqsClient, taskRepo: taskRepo, notiService: notiService, hub: hub}
 }
 
 // SendTaskNotification はタスク情報をSQSに送信します
-func (s *WorkerService) SendTaskNotification(ctx context.Context, taskID uint, userID uint, message string) error {
+func (s *WorkerService) SendTaskNotification(ctx context.Context, taskID uuid.UUID, userID uuid.UUID, message string) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"task_id": taskID,
 		"user_id": userID,
@@ -49,7 +53,7 @@ func (s *WorkerService) SendTaskNotification(ctx context.Context, taskID uint, u
 	err = s.taskRepo.UpdateLastNotifiedAt(ctx, taskID, time.Now())
 	if err != nil {
 		// ここでエラーになっても、SQSには飛んでいるのでログ出力に留めるのが一般的
-		log.Printf("Failed to update last_notified_at for task %v: %v", taskID, err)
+		log.Printf("Failed to update last_notified_at for task %s: %v", taskID, err)
 	}
 
 	return nil
@@ -64,11 +68,10 @@ func (s *WorkerService) StartWorker(ctx context.Context) {
 			log.Println("Worker shutting down...")
 			return
 		default:
-			// ロングポーリングでメッセージを受信
 			output, err := s.sqsClient.Client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 				QueueUrl:            &s.sqsClient.QueueUrl,
 				MaxNumberOfMessages: 1,
-				WaitTimeSeconds:     20, // ロングポーリング
+				WaitTimeSeconds:     20,
 			})
 
 			if err != nil {
@@ -79,26 +82,46 @@ func (s *WorkerService) StartWorker(ctx context.Context) {
 			for _, msg := range output.Messages {
 				log.Printf("Processing message: %s", *msg.Body)
 
-				// --- WebSocket連携 ---
-				// 1. SQSから届いたJSONを構造体にデコード
-				var notifyData NotificationMessage
+				var notifyData models.NotificationMessage
 				if err := json.Unmarshal([]byte(*msg.Body), &notifyData); err != nil {
 					log.Printf("Failed to unmarshal SQS message: %v", err)
-					// 解析に失敗した場合は削除して良いか検討が必要。
-					// 開発の現段階では一旦ログを出してスキップします
-				} else {
-					// 2. Hubのチャネルにメッセージを送信（ここでWebSocket配信が実行される）
-					s.hub.Broadcast <- &notifyData
+					continue
 				}
 
-				// 処理成功後にメッセージを削除（重要！）
-				_, err := s.sqsClient.Client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+				// --- ★【新規追加】DBへの永続化ロジック ---
+				// SQSから届いたデータを元に、DB保存用のモデルを作成
+				newNoti := &models.Notification{
+					ID:        uuid.New(),
+					UserID:    notifyData.UserID,
+					Message:   notifyData.Message,
+					Type:      "task_deadline", // 通知種別
+					IsRead:    false,
+					CreatedAt: time.Now(),
+				}
+
+				// Optional: TaskIDがメッセージに含まれている場合はセットする
+				// newNoti.TaskID = &notifyData.TaskID (モデル側が対応していれば)
+
+				// DBに保存
+				if err := s.notiService.Create(ctx, newNoti); err != nil {
+					log.Printf("Failed to save notification to DB: %v", err)
+					// DB保存に失敗しても、リアルタイム通知は試みるか検討
+				} else {
+					// 保存に成功した場合、Hub経由で配信するメッセージにDB上のIDをセットする
+					notifyData.ID = newNoti.ID
+				}
+
+				// --- WebSocket/Redis連携 ---
+				// Redisを通じて全サーバーへブロードキャスト
+				if err := s.hub.PublishMessage(ctx, notifyData); err != nil {
+					log.Printf("Failed to publish to Redis: %v", err)
+				}
+
+				// メッセージを削除
+				s.sqsClient.Client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 					QueueUrl:      &s.sqsClient.QueueUrl,
 					ReceiptHandle: msg.ReceiptHandle,
 				})
-				if err != nil {
-					log.Printf("Failed to delete message: %v", err)
-				}
 			}
 		}
 	}
@@ -138,9 +161,9 @@ func (s *WorkerService) StartTaskWatcher(ctx context.Context) {
 				// SendTaskNotification 内で SQS送信 ＋ DBの更新が行われる
 				err := s.SendTaskNotification(ctx, task.ID, task.UserID, message)
 				if err != nil {
-					log.Printf("Failed to send notification for task %d: %v", task.ID, err)
+					log.Printf("Failed to send notification for task %s: %v", task.ID, err)
 				} else {
-					log.Printf("Successfully queued notification for task %d", task.ID)
+					log.Printf("Successfully queued notification for task %s", task.ID)
 				}
 			}
 		}

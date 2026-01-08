@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	mockPkg "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
-	"gorm.io/gorm"
 )
 
 // TaskTestSuite はタスクサービス (TaskService) のテストスイートです
@@ -41,7 +41,7 @@ func (s *TaskTestSuite) TestCreateTask_Success() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	userID := uint(100)
+	userID := uuid.New()
 	req := &models.TaskCreateRequest{
 		Title:       "Test Task",
 		Description: "This is a test task",
@@ -76,11 +76,9 @@ func (s *TaskTestSuite) TestGetTaskByID_Success() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	userID := uint(100)
-	taskID := uint(100)
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
-		UserID:      userID,
+		ID:          uuid.New(),
+		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
@@ -88,10 +86,10 @@ func (s *TaskTestSuite) TestGetTaskByID_Success() {
 	}
 
 	// 2. モックの期待値設定
-	s.mockTaskRepo.On("FindByID", taskID).Return(task, nil).Once()
+	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
 
 	// 3. 実行と検証
-	task, err := s.taskService.GetTaskByID(userID, taskID)
+	task, err := s.taskService.GetTaskByID(task.UserID, task.ID)
 
 	// エラーがないことを検証
 	assert.NoError(t, err)
@@ -107,11 +105,9 @@ func (s *TaskTestSuite) TestGetTasks_Success() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	userID := uint(100)
-	taskID := uint(100)
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
-		UserID:      userID,
+		ID:          uuid.New(),
+		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
@@ -120,10 +116,10 @@ func (s *TaskTestSuite) TestGetTasks_Success() {
 	tasks := []models.Task{*task}
 
 	// 2. モックの期待値設定
-	s.mockTaskRepo.On("FindAllByUserID", userID).Return(tasks, nil).Once()
+	s.mockTaskRepo.On("FindAllByUserID", task.UserID).Return(tasks, nil).Once()
 
 	// 3. 実行と検証
-	tasks, err := s.taskService.GetTasks(userID)
+	tasks, err := s.taskService.GetTasks(task.UserID)
 
 	// エラーがないことを検証
 	assert.NoError(t, err)
@@ -141,7 +137,7 @@ func (s *TaskTestSuite) TestGetTasks_NoTasksFound() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	requestingUserID := uint(100) // リクエストを行ったユーザー (User 101)
+	requestingUserID := uuid.New() // リクエストを行ったユーザー (User 101)
 
 	// 2. モックの期待値設定
 	s.mockTaskRepo.On("FindAllByUserID", requestingUserID).Return([]models.Task{}, nil).Once()
@@ -165,11 +161,9 @@ func (s *TaskTestSuite) TestUpdateTask_Success() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	userID := uint(100)
-	taskID := uint(100)
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
-		UserID:      userID,
+		ID:          uuid.New(),
+		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
@@ -187,11 +181,11 @@ func (s *TaskTestSuite) TestUpdateTask_Success() {
 	}
 
 	// 2. モックの期待値設定
-	s.mockTaskRepo.On("FindByID", taskID).Return(task, nil).Once()
+	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
 	s.mockTaskRepo.On("Update", mockPkg.AnythingOfType("*models.Task")).Return(nil).Once()
 
 	// 3. 実行と検証
-	task, err := s.taskService.UpdateTask(userID, taskID, req)
+	task, err := s.taskService.UpdateTask(task.UserID, task.ID, req)
 
 	// エラーがないことを検証
 	assert.NoError(t, err)
@@ -207,11 +201,9 @@ func (s *TaskTestSuite) TestDeleteTask_Success() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	userID := uint(100)
-	taskID := uint(100)
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
-		UserID:      userID,
+		ID:          uuid.New(),
+		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
@@ -219,11 +211,11 @@ func (s *TaskTestSuite) TestDeleteTask_Success() {
 	}
 
 	// 2. モックの期待値設定
-	s.mockTaskRepo.On("FindByID", taskID).Return(task, nil).Once()
-	s.mockTaskRepo.On("Delete", taskID).Return(nil).Once()
+	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
+	s.mockTaskRepo.On("Delete", task.ID).Return(nil).Once()
 
 	// 3. 実行と検証
-	err := s.taskService.DeleteTask(userID, taskID)
+	err := s.taskService.DeleteTask(task.UserID, task.ID)
 
 	// エラーがないことを検証
 	assert.NoError(t, err)
@@ -240,22 +232,21 @@ func (s *TaskTestSuite) TestGetTaskByID_Authorization() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	userID := uint(100)
-	taskID := uint(100)
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
-		UserID:      userID,
+		ID:          uuid.New(),
+		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
 		DueDate:     time.Now().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
+	unauthorizedUserID := uuid.New()
 
 	// 2. モックの期待値設定
-	s.mockTaskRepo.On("FindByID", taskID).Return(task, nil).Once()
+	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
 
 	// 3. 実行と検証
-	task, err := s.taskService.GetTaskByID(userID+1, taskID)
+	task, err := s.taskService.GetTaskByID(unauthorizedUserID, task.ID)
 
 	// エラーが発生していることを検証
 	assert.Error(t, err)
@@ -271,11 +262,10 @@ func (s *TaskTestSuite) TestUpdateTask_Authorization() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	taskOwnerID := uint(100)        // タスクの所有者ID
-	unauthorizedUserID := uint(101) // 権限のないユーザーID
-	taskID := uint(100)
+	taskOwnerID := uuid.New()        // タスクの所有者ID
+	unauthorizedUserID := uuid.New() // 権限のないユーザーID
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
+		ID:          uuid.New(),
 		UserID:      taskOwnerID,
 		Title:       "Test Task",
 		Description: "This is a test task",
@@ -297,11 +287,11 @@ func (s *TaskTestSuite) TestUpdateTask_Authorization() {
 
 	// 2. モックの期待値設定
 	// 認可チェックのため、Service層はまずタスクをDBから取得する（FindByIDは呼ばれる）
-	s.mockTaskRepo.On("FindByID", taskID).Return(task, nil).Once()
+	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
 
 	// 3. 実行と検証
 	// 権限のないユーザーID(101)で更新を試みる
-	updatedTask, err := s.taskService.UpdateTask(unauthorizedUserID, taskID, req)
+	updatedTask, err := s.taskService.UpdateTask(unauthorizedUserID, task.ID, req)
 
 	// エラーが発生し、かつそれが認可エラーであることを検証
 	assert.Error(t, err)
@@ -322,11 +312,10 @@ func (s *TaskTestSuite) TestDeleteTask_Authorization() {
 	t := s.T()
 
 	// 1. テストデータの準備
-	taskOwnerID := uint(100)        // タスクの所有者ID
-	unauthorizedUserID := uint(101) // 権限のないユーザーID
-	taskID := uint(100)
+	taskOwnerID := uuid.New()        // タスクの所有者ID
+	unauthorizedUserID := uuid.New() // 権限のないユーザーID
 	task := &models.Task{
-		Model:       gorm.Model{ID: taskID},
+		ID:          uuid.New(),
 		UserID:      taskOwnerID,
 		Title:       "Test Task",
 		Description: "This is a test task",
@@ -336,11 +325,11 @@ func (s *TaskTestSuite) TestDeleteTask_Authorization() {
 
 	// 2. モックの期待値設定
 	// 認可チェックのため、Service層はまずタスクをDBから取得する（FindByIDは呼ばれる）
-	s.mockTaskRepo.On("FindByID", taskID).Return(task, nil).Once()
+	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
 
 	// 3. 実行と検証
 	// 権限のないユーザーID(101)で削除を試みる
-	err := s.taskService.DeleteTask(unauthorizedUserID, taskID)
+	err := s.taskService.DeleteTask(unauthorizedUserID, task.ID)
 
 	// エラーが発生し、かつそれが認可エラーであることを検証
 	assert.Error(t, err)

@@ -7,12 +7,12 @@ import (
 
 	// JWTやハッシュ化に使用するライブラリをインポート
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type TestClaims struct {
-	UserID uint `json:"user_id"`
+	UserID uuid.UUID `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
@@ -31,9 +31,9 @@ var GlobalTestConfig = &TestConfig{
 }
 
 // CreateTestUser はテスト用のダミーユーザーインスタンスを返します
-func CreateTestUser(id uint, username string, hashedPassword string) *models.User {
+func CreateTestUser(id uuid.UUID, username string, hashedPassword string) *models.User {
 	return &models.User{
-		Model:     gorm.Model{ID: id},
+		ID:        id,
 		Username:  username,
 		Password:  hashedPassword, // ハッシュ済みのパスワードを設定
 		CreatedAt: time.Now(),
@@ -52,7 +52,7 @@ func HashPassword(password string) (string, error) {
 }
 
 // GenerateTestToken は指定されたユーザーIDのテスト用有効なJWTを生成します
-func GenerateTestToken(userID uint, secretKey string) (string, error) {
+func GenerateTestToken(userID uuid.UUID, secretKey string) (string, error) {
 	// 1. 有効期限を設定 (例: 7日間。本番のjwt.goと合わせる)
 	expirationTime := time.Now().Add(7 * 24 * time.Hour)
 
@@ -78,7 +78,7 @@ func GenerateTestToken(userID uint, secretKey string) (string, error) {
 }
 
 // GenerateExpiredToken は指定されたユーザーIDの期限切れのテスト用JWTを生成します
-func GenerateExpiredToken(userID uint, secretKey string) (string, error) {
+func GenerateExpiredToken(userID uuid.UUID, secretKey string) (string, error) {
 	// 1. 過去の有効期限を設定 (例: 1時間前)
 	expirationTime := time.Now().Add(-time.Hour)
 
@@ -98,7 +98,7 @@ func GenerateExpiredToken(userID uint, secretKey string) (string, error) {
 }
 
 // GenerateInvalidSignatureToken は指定されたユーザーIDの不正な署名のテスト用JWTを生成します
-func GenerateInvalidSignatureToken(userID uint, secretKey string) (string, error) {
+func GenerateInvalidSignatureToken(userID uuid.UUID, secretKey string) (string, error) {
 	// 1. 有効期限を設定 (例: 1時間後)
 	claims := &TestClaims{
 		UserID: userID,

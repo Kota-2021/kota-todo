@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -15,16 +16,17 @@ const (
 
 // Task はタスクのデータベースレコードを表します。
 type Task struct {
-	gorm.Model // ID, CreatedAt, UpdatedAt, DeletedAt を自動で追加
-	// 外部キー: どのユーザーがこのタスクを作成したか
-	UserID         uint       `gorm:"not null" json:"user_id"`
-	Title          string     `gorm:"type:varchar(255);not null" json:"title"`
-	Description    string     `gorm:"type:text" json:"description"`
-	DueDate        time.Time  `gorm:"type:timestamp" json:"due_date"`
-	LastNotifiedAt *time.Time `json:"last_notified_at" gorm:"type:timestamp"` // ポインタにしてNULLを許容
-	Status         string     `gorm:"type:varchar(20);not null;default:pending" json:"status"`
-	CreatedAt      time.Time  `gorm:"type:timestamp" json:"created_at"`
-	UpdatedAt      time.Time  `gorm:"type:timestamp" json:"updated_at"`
+	ID     uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
+	// UserID         uint       `gorm:"not null" json:"user_id"` // 260108byKota
+	Title          string         `gorm:"type:varchar(255);not null" json:"title"`
+	Description    string         `gorm:"type:text" json:"description"`
+	DueDate        time.Time      `gorm:"type:timestamp" json:"due_date"`
+	LastNotifiedAt *time.Time     `json:"last_notified_at" gorm:"type:timestamp"` // ポインタにしてNULLを許容
+	Status         string         `gorm:"type:varchar(20);not null;default:pending" json:"status"`
+	CreatedAt      time.Time      `gorm:"type:timestamp" json:"created_at"`
+	UpdatedAt      time.Time      `gorm:"type:timestamp" json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // TaskCreateRequest は、タスク作成リクエストの入力データ構造です。
@@ -42,4 +44,12 @@ type TaskUpdateRequest struct {
 	DueDate     *time.Time `json:"due_date"`
 	// IsCompleted *bool      `json:"is_completed"`
 	Status *string `json:"status"`
+}
+
+// BeforeCreate GORMのフックを使用して、作成時に自動でUUIDを付与する
+func (t *Task) BeforeCreate(tx *gorm.DB) (err error) {
+	if t.ID == uuid.Nil {
+		t.ID = uuid.New()
+	}
+	return
 }

@@ -6,6 +6,7 @@ import (
 	"my-portfolio-2025/internal/app/models" // モデルパッケージへのパスは適宜修正してください
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -27,7 +28,7 @@ func (m *MockTaskRepository) Create(task *models.Task) error {
 }
 
 // FindAllByUserID は TaskRepository.FindAllByUserID のモック実装です
-func (m *MockTaskRepository) FindAllByUserID(userID uint) ([]models.Task, error) {
+func (m *MockTaskRepository) FindAllByUserID(userID uuid.UUID) ([]models.Task, error) {
 	args := m.Called(userID)
 
 	var tasks []models.Task
@@ -39,7 +40,7 @@ func (m *MockTaskRepository) FindAllByUserID(userID uint) ([]models.Task, error)
 }
 
 // FindByID は TaskRepository.FindByID のモック実装です
-func (m *MockTaskRepository) FindByID(taskID uint) (*models.Task, error) {
+func (m *MockTaskRepository) FindByID(taskID uuid.UUID) (*models.Task, error) {
 	args := m.Called(taskID)
 
 	var task *models.Task
@@ -64,7 +65,7 @@ func (m *MockTaskRepository) Update(task *models.Task) error {
 }
 
 // Delete は TaskRepository.Delete のモック実装です
-func (m *MockTaskRepository) Delete(taskID uint) error {
+func (m *MockTaskRepository) Delete(taskID uuid.UUID) error {
 	// Mockオブジェクトに設定された期待値（引数と戻り値）に基づいて処理を実行します
 	args := m.Called(taskID)
 
@@ -88,7 +89,7 @@ func (m *MockTaskRepository) FindUpcomingTasks(ctx context.Context, threshold ti
 }
 
 // UpdateLastNotifiedAt は TaskRepository.UpdateLastNotifiedAt のモック実装です
-func (m *MockTaskRepository) UpdateLastNotifiedAt(ctx context.Context, taskID uint, notifiedAt time.Time) error {
+func (m *MockTaskRepository) UpdateLastNotifiedAt(ctx context.Context, taskID uuid.UUID, notifiedAt time.Time) error {
 	// テスト時に呼び出しを記録したり、エラーをシミュレートしたりするためのロジック
 	// testify/mock を使っている場合は以下のように記述
 	args := m.Called(ctx, taskID, notifiedAt)

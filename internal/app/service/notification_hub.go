@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"my-portfolio-2025/internal/app/models"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
@@ -15,16 +17,16 @@ type NotificationHub struct {
 	// 接続中のクライアントを管理 (ユーザーID -> WebSocket接続)
 	// 1ユーザーが複数デバイスで繋ぐ場合は [] *websocket.Conn にしますが、
 	// 今回はシンプルに 1ユーザー1接続として実装します
-	clients map[uint]*websocket.Conn
+	clients map[uuid.UUID]*websocket.Conn
 
 	// クライアントからの新規接続通知用チャネル
 	Register chan *ClientRegistration
 
 	// クライアントの切断通知用チャネル
-	Unregister chan uint
+	Unregister chan uuid.UUID
 
 	// 配信メッセージ用チャネル
-	Broadcast chan *NotificationMessage
+	Broadcast chan *models.NotificationMessage
 
 	// マップ操作時の排他制御用
 	mu sync.Mutex
@@ -35,23 +37,17 @@ type NotificationHub struct {
 
 // 登録用構造体
 type ClientRegistration struct {
-	UserID uint
+	UserID uuid.UUID
 	Conn   *websocket.Conn
-}
-
-// 配信メッセージ構造体
-type NotificationMessage struct {
-	UserID  uint   `json:"user_id"`
-	Message string `json:"message"`
 }
 
 // NewNotificationHub は新しいハブを作成します
 func NewNotificationHub(redisClient *redis.Client) *NotificationHub {
 	return &NotificationHub{
-		clients:     make(map[uint]*websocket.Conn),
+		clients:     make(map[uuid.UUID]*websocket.Conn),
 		Register:    make(chan *ClientRegistration),
-		Unregister:  make(chan uint),
-		Broadcast:   make(chan *NotificationMessage),
+		Unregister:  make(chan uuid.UUID),
+		Broadcast:   make(chan *models.NotificationMessage),
 		redisClient: redisClient,
 	}
 }
@@ -67,7 +63,7 @@ func (h *NotificationHub) Run() {
 			// クライアントをマップに追加
 			h.clients[reg.UserID] = reg.Conn
 			h.mu.Unlock()
-			log.Printf("User %d connected via WebSocket", reg.UserID)
+			log.Printf("User %s connected via WebSocket", reg.UserID)
 
 		// クライアントの切断通知用チャネルを受け取った場合の処理
 		case userID := <-h.Unregister:
@@ -76,7 +72,7 @@ func (h *NotificationHub) Run() {
 			if conn, ok := h.clients[userID]; ok {
 				conn.Close()
 				delete(h.clients, userID)
-				log.Printf("User %d disconnected", userID)
+				log.Printf("User %s disconnected", userID)
 			}
 			h.mu.Unlock()
 
@@ -87,7 +83,7 @@ func (h *NotificationHub) Run() {
 			if conn, ok := h.clients[msg.UserID]; ok {
 				err := conn.WriteJSON(msg)
 				if err != nil {
-					log.Printf("Error sending message to user %d: %v", msg.UserID, err)
+					log.Printf("Error sending message to user %s: %v", msg.UserID, err)
 					conn.Close()
 					// クライアントをマップから削除
 					delete(h.clients, msg.UserID)
@@ -99,7 +95,7 @@ func (h *NotificationHub) Run() {
 }
 
 // 1. Redisへの「出版」処理
-func (h *NotificationHub) PublishMessage(ctx context.Context, msg NotificationMessage) error {
+func (h *NotificationHub) PublishMessage(ctx context.Context, msg models.NotificationMessage) error {
 	payload, _ := json.Marshal(msg)
 	// "notifications" チャンネルへ送信
 	return h.redisClient.Publish(ctx, "notifications", payload).Err()
@@ -114,7 +110,7 @@ func (h *NotificationHub) SubscribeRedis(ctx context.Context) {
 	log.Println("Subscribed to Redis notifications channel...")
 
 	for msg := range ch {
-		var notif NotificationMessage
+		var notif models.NotificationMessage
 		if err := json.Unmarshal([]byte(msg.Payload), &notif); err != nil {
 			log.Printf("Failed to unmarshal Redis message: %v", err)
 			continue

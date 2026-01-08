@@ -9,6 +9,7 @@ import (
 
 	"my-portfolio-2025/pkg/auth"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	mockPkg "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -103,7 +104,7 @@ func (s *AuthTestSuite) TestSignup_UserAlreadyExists() {
 	}
 
 	// ID 1, ハッシュ済みパスワードを持つ既存ユーザー
-	existingUser := testutils.CreateTestUser(1, username, "dummyhash")
+	existingUser := testutils.CreateTestUser(uuid.New(), username, "dummyhash")
 
 	// --- 2. モックの期待値設定 ---
 
@@ -132,7 +133,7 @@ func (s *AuthTestSuite) TestSignin_Success() {
 
 	// 1. テストデータの準備: 正しいパスワードのハッシュ化
 	hashedPassword, _ := testutils.HashPassword(password)
-	authenticatedUser := testutils.CreateTestUser(1, username, hashedPassword)
+	authenticatedUser := testutils.CreateTestUser(uuid.New(), username, hashedPassword)
 
 	// --- 2. モックの期待値設定 ---
 
@@ -174,7 +175,7 @@ func (s *AuthTestSuite) TestSignin_PasswordMismatch() {
 
 	// 1. テストデータの準備: 正しいパスワードでハッシュ化されたユーザーを用意
 	hashedPassword, _ := testutils.HashPassword(correctPassword)
-	existingUser := testutils.CreateTestUser(1, username, hashedPassword)
+	existingUser := testutils.CreateTestUser(uuid.New(), username, hashedPassword)
 
 	// --- 2. モックの期待値設定 ---
 
@@ -236,7 +237,7 @@ func (s *AuthTestSuite) TestJWTVerification_Success() {
 	t := s.T()
 	username := "verifieduser"
 	password := "testpass"
-	userID := uint(100)
+	userID := uuid.New()
 
 	// 1. テストデータの準備: 認証成功時のシミュレーション
 	// ※ ユーザーモデルにJWTトークン生成に必要なフィールド（例: ID）が含まれていることを前提とします。
@@ -274,7 +275,7 @@ func (s *AuthTestSuite) TestJWTVerification_Success() {
 // テストケース: 期限切れのJWTトークンが、エラーを返すことを確認
 func (s *AuthTestSuite) TestJWTVerification_ExpiredToken() {
 	t := s.T()
-	userID := uint(200)
+	userID := uuid.New()
 
 	// --- 1. 期限切れトークンの作成 ---
 	//期限切れトークンを生成するためのヘルパー関数GenerateExpiredTokenを使用
@@ -300,7 +301,7 @@ func (s *AuthTestSuite) TestJWTVerification_ExpiredToken() {
 // テストケース: 不正な署名のJWTトークンが、エラーを返すことを確認
 func (s *AuthTestSuite) TestJWTVerification_InvalidSignature() {
 	t := s.T()
-	userID := uint(300)
+	userID := uuid.New()
 
 	// --- 1. 異なる秘密鍵で署名されたトークンの作成 ---
 
@@ -333,5 +334,5 @@ func (s *AuthTestSuite) TestJWTVerification_InvalidSignature() {
 	// assert.True(t, errors.Is(err, service.ErrInvalidSignature), "エラーはErrInvalidSignatureであるべき")
 
 	// (3) ユーザーIDが0または無効な値であることを検証
-	assert.Equal(t, uint(0), extractedUserID, "抽出されるユーザーIDは0であるべき")
+	assert.Equal(t, 9999, extractedUserID, "抽出されるユーザーIDは0であるべき")
 }

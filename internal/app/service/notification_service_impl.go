@@ -31,3 +31,8 @@ func (s *notificationServiceImpl) GetNotifications(ctx context.Context, userID u
 func (s *notificationServiceImpl) MarkAsRead(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
 	return s.repo.MarkAsRead(ctx, id, userID)
 }
+
+func (s *notificationServiceImpl) Create(ctx context.Context, notification *models.Notification) error {
+	// Repositoryを呼び出してDBに保存
+	return s.repo.Create(ctx, notification)
+}

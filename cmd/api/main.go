@@ -27,16 +27,16 @@ import (
 func setupDatabase() *gorm.DB {
 	log.Println("=== データベース接続開始 ===")
 
-	// ローカルでの開発用.envファイルの読み込み
-	currentPath, errEnv := os.Getwd()
-	if errEnv != nil {
-		log.Fatal("Error getting current path")
-	}
-	envFilePath := currentPath + "/.env"
-	errEnv = godotenv.Load(envFilePath)
-	if errEnv != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// ローカルでの開発用.envファイルの読み込み以下を有効化する事
+	// currentPath, errEnv := os.Getwd()
+	// if errEnv != nil {
+	// 	log.Fatal("Error getting current path")
+	// }
+	// envFilePath := currentPath + "/.env"
+	// errEnv = godotenv.Load(envFilePath)
+	// if errEnv != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
 
 	// 環境変数から接続情報を取得
@@ -140,8 +140,8 @@ func main() {
 	// 2. 依存性の注入（DI）と各層の初期化
 	// Task Handlerを先に初期化できるように、UserとTaskの両方の依存性をここで定義
 
-	// --- 追加: SQS/Worker 関連の初期化 ---
-	// 環境変数からキュー名を取得 (例: "my-portfolio-queue")
+	// --- SQS/Worker 関連の初期化 ---
+	// 環境変数からキュー名を取得
 	queueName := os.Getenv("SQS_QUEUE_NAME")
 
 	// --- 非同期ワーカーの依存性 ---
@@ -152,25 +152,27 @@ func main() {
 		// 本番環境では Fatalf にする検討も必要ですが、まずは実行を優先
 	}
 
-	// 認証機能の依存性
+	// --- 依存性の注入（DI）と各層の初期化 ---
 	userRepo := repository.NewUserRepository(db)
-	authService := service.NewAuthService(userRepo)
-	authController := handler.NewAuthController(authService)
-
-	// タスク管理機能の依存性
 	taskRepo := repository.NewTaskRepository(db)
+	notiRepo := repository.NewNotificationRepository(db)
+
+	authService := service.NewAuthService(userRepo)
+	authHandler := handler.NewAuthController(authService)
+
+	notiService := service.NewNotificationService(notiRepo)
+	notificationHandler := handler.NewNotificationHandler(notiService, hub)
 
 	// WorkerService を初期化 (taskRepoを渡すことで、二重送信防止の更新を可能にする)
-	workerService := service.NewWorkerService(sqsClient, taskRepo, hub)
-	// workerService := service.NewWorkerService(sqsClient, taskRepo)
+	workerService := service.NewWorkerService(sqsClient, taskRepo, notiService, hub)
 	taskService := service.NewTaskService(taskRepo, workerService)
 	taskHandler := handler.NewTaskHandler(taskService)
 
 	// NotificationHandler の初期化
-	notificationHandler := handler.NewNotificationHandler(hub)
+	// notificationHandler := handler.NewNotificationHandler(hub) // 260108byKota
 
 	// 3. ルーター設定とハンドラーの紐づけ
-	r := router.SetupRouter(authController, taskHandler, notificationHandler)
+	r := router.SetupRouter(authHandler, taskHandler, notificationHandler)
 
 	// ヘルスチェックエンドポイントの追加（ALB/ECS用）
 	r.GET("/health", func(c *gin.Context) {
