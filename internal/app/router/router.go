@@ -4,8 +4,10 @@ package router
 import (
 	"my-portfolio-2025/internal/app/handler"
 	"my-portfolio-2025/internal/app/middleware"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 // SetupRouter は全てのルートを設定します
@@ -13,6 +15,7 @@ func SetupRouter(
 	authHandler *handler.AuthController,
 	taskHandler *handler.TaskHandler,
 	notificationHandler *handler.NotificationHandler,
+	redisClient *redis.Client,
 ) *gin.Engine {
 
 	r := gin.Default()
@@ -30,6 +33,7 @@ func SetupRouter(
 	// --- 認証必須のルート共通設定 ---
 	authGroup := r.Group("/")
 	authGroup.Use(middleware.AuthMiddleware())
+	authGroup.Use(middleware.RateLimiter(redisClient, 5, time.Minute))
 	{
 		// タスク関連
 		tasks := authGroup.Group("/tasks")

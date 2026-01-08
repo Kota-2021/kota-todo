@@ -172,7 +172,7 @@ func main() {
 	// notificationHandler := handler.NewNotificationHandler(hub) // 260108byKota
 
 	// 3. ルーター設定とハンドラーの紐づけ
-	r := router.SetupRouter(authHandler, taskHandler, notificationHandler)
+	r := router.SetupRouter(authHandler, taskHandler, notificationHandler, rdb)
 
 	// ヘルスチェックエンドポイントの追加（ALB/ECS用）
 	r.GET("/health", func(c *gin.Context) {
