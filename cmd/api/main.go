@@ -92,7 +92,7 @@ func setupDatabase() *gorm.DB {
 
 	// データベースマイグレーション
 	// データベースが存在しない場合は自動作成される。
-	err = db.AutoMigrate(&models.User{}, &models.Task{})
+	err = db.AutoMigrate(&models.User{}, &models.Task{}, &models.Notification{})
 	if err != nil {
 		log.Fatalf("Failed to perform database migration: %v", err)
 	}
