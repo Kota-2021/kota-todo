@@ -72,6 +72,21 @@ services:
     working_dir: /app
     command: go run -mod=mod ./cmd/api  # -mod=modフラグを追加
 
+  # LocalStack (SQS用)テスト用に追加。260108byKota
+  localstack:
+    image: localstack/localstack:latest
+    container_name: my-portfolio-localstack
+    ports:
+      - "4566:4566"            # LocalStack のエッジポート
+    environment:
+      - SERVICES=sqs           # SQSサービスのみ有効化
+      - ENFORCE_IAM=0          # これが 1 になっていると test 認証を拒絶する
+      - DEFAULT_REGION=ap-northeast-1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "./localstack:/var/lib/localstack"
+      # - "/var/run/docker.sock:/var/run/docker.sock"
+
 volumes:
   postgres_data:
   redis_data:

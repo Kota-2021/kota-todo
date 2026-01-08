@@ -28,15 +28,15 @@ func setupDatabase() *gorm.DB {
 	log.Println("=== データベース接続開始 ===")
 
 	// ローカルでの開発用.envファイルの読み込み以下を有効化する事
-	// currentPath, errEnv := os.Getwd()
-	// if errEnv != nil {
-	// 	log.Fatal("Error getting current path")
-	// }
-	// envFilePath := currentPath + "/.env"
-	// errEnv = godotenv.Load(envFilePath)
-	// if errEnv != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
+	currentPath, errEnv := os.Getwd()
+	if errEnv != nil {
+		log.Fatal("Error getting current path")
+	}
+	envFilePath := currentPath + "/.env"
+	errEnv = godotenv.Load(envFilePath)
+	if errEnv != nil {
+		log.Fatal("Error loading .env file")
+	}
 	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
 
 	// 環境変数から接続情報を取得

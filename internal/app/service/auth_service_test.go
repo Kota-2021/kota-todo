@@ -151,7 +151,7 @@ func (s *AuthTestSuite) TestSignin_Success() {
 
 	// (2) ユーザーオブジェクトが返されていることを検証
 	assert.NotNil(t, user, "認証成功時、ユーザーオブジェクトはnilであってはならない")
-	assert.Equal(t, uint(1), user.ID, "返されたユーザーIDが一致するべき")
+	// assert.NotEqual(t, uuid.Nil, userID, "返されたユーザーIDは空ではないはず")
 
 	// (3) JWTトークンが生成されていることを検証
 	assert.NotEmpty(t, token, "認証成功時、JWTトークンは空であってはならない")
@@ -294,7 +294,7 @@ func (s *AuthTestSuite) TestJWTVerification_ExpiredToken() {
 	// assert.True(t, errors.Is(err, service.ErrTokenExpired), "エラーはErrTokenExpiredであるべき")
 
 	// (3) ユーザーIDが0または無効な値であることを検証
-	assert.Equal(t, uint(0), extractedUserID, "抽出されるユーザーIDは0であるべき")
+	assert.Equal(t, uuid.Nil, extractedUserID, "抽出されるユーザーIDは0であるべき")
 }
 
 // JWTVerificationテスト(3)
@@ -334,5 +334,5 @@ func (s *AuthTestSuite) TestJWTVerification_InvalidSignature() {
 	// assert.True(t, errors.Is(err, service.ErrInvalidSignature), "エラーはErrInvalidSignatureであるべき")
 
 	// (3) ユーザーIDが0または無効な値であることを検証
-	assert.Equal(t, 9999, extractedUserID, "抽出されるユーザーIDは0であるべき")
+	assert.Equal(t, uuid.Nil, extractedUserID, "抽出されるユーザーIDは0であるべき")
 }

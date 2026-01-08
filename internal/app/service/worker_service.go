@@ -76,6 +76,7 @@ func (s *WorkerService) StartWorker(ctx context.Context) {
 
 			if err != nil {
 				log.Printf("Failed to receive message: %v", err)
+				time.Sleep(5 * time.Second)
 				continue
 			}
 
@@ -135,6 +136,29 @@ func (s *WorkerService) StartTaskWatcher(ctx context.Context) {
 	defer ticker.Stop()
 
 	log.Println("Task Watcher (Producer) started...")
+
+	// --- test用にここを追加: 起動直後に1回実行する関数を定義 (260109byKota) ---
+	runWatcher := func() {
+		threshold := time.Now().Add(1 * time.Hour)
+		tasks, err := s.taskRepo.FindUpcomingTasks(ctx, threshold)
+		if err != nil {
+			log.Printf("Error finding upcoming tasks: %v", err)
+			return
+		}
+
+		for _, task := range tasks {
+			message := fmt.Sprintf("タスク「%s」の期限が近づいています（期限: %s）",
+				task.Title, task.DueDate.Format("15:04"))
+			err := s.SendTaskNotification(ctx, task.ID, task.UserID, message)
+			if err != nil {
+				log.Printf("Failed to send notification for task %s: %v", task.ID, err)
+			} else {
+				log.Printf("Successfully queued notification for task %s", task.ID)
+			}
+		}
+	}
+	// 初回実行
+	runWatcher()
 
 	for {
 		select {

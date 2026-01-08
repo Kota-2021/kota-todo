@@ -47,7 +47,7 @@ func (h *NotificationHandler) HandleWS(c *gin.Context) {
 
 	// **テスト用にユーザーIDを固定（UserID: 1）**
 	// userID := uint(1) // 260108byKota
-	userID := uuid.New()
+	userID := c.MustGet("userID").(uuid.UUID)
 
 	// 2. Hubに登録
 	h.hub.Register <- &service.ClientRegistration{

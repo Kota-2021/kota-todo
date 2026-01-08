@@ -82,7 +82,10 @@ func (r *taskRepositoryImpl) FindUpcomingTasks(ctx context.Context, threshold ti
 	now := time.Now()
 
 	err := r.db.WithContext(ctx).
-		Where("due_date <= ? AND IsCompleted = ? AND (last_notified_at IS NULL OR last_notified_at < ? - INTERVAL '1 hour')", threshold, false, now).
+		// Where("due_date <= ? AND is_completed = ? AND (last_notified_at IS NULL OR last_notified_at < ? - INTERVAL '1 hour')", threshold, false, now).
+		// Status が "completed"（完了）ではないものを対象にする
+		Where("due_date <= ? AND status != ? AND (last_notified_at IS NULL OR last_notified_at < ?)",
+			threshold, models.TaskStatusCompleted, now.Add(-1*time.Hour)).
 		Find(&tasks).Error
 	if err != nil {
 		return nil, err
