@@ -80,7 +80,7 @@ func (h *NotificationHandler) HandleWS(c *gin.Context) {
 // GET /notifications?page=1
 func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	// ミドルウェアからUserIDを取得 (JWT認証済み前提)
-	userIDStr, exists := c.Get("user_id")
+	userIDStr, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -102,7 +102,7 @@ func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 // MarkAsRead は特定の通知を既読にします
 // PATCH /notifications/:id/read
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
-	userIDStr, exists := c.Get("user_id")
+	userIDStr, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
