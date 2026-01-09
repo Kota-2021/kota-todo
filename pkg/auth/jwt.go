@@ -4,20 +4,27 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
-// JWT_SECRET は環境変数などから取得する（セキュリティ上の重要項目）
-// AWS Secrets Managerから取得した秘密鍵を使用
-const JWT_SECRET = "YOUR_SUPER_SECRET_KEY_MUST_BE_SECURELY_MANAGED"
-
 // Claims はJWTのペイロードを定義
 type Claims struct {
 	UserID uuid.UUID `json:"user_id"`
 	jwt.RegisteredClaims
+}
+
+func getJWTSecret() []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		// ローカル開発用にデフォルト値を残しても良いですが、
+		// 基本は ecs.tf の設定値が優先されます
+		return []byte("YOUR_SUPER_SECRET_KEY_MUST_BE_SECURELY_MANAGED")
+	}
+	return []byte(secret)
 }
 
 // GenerateToken は指定されたユーザーIDのJWTを生成します
@@ -37,7 +44,7 @@ func GenerateToken(userID uuid.UUID) (string, error) {
 	// 3. トークンを生成し、HS256で秘密鍵を使って署名
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString([]byte(JWT_SECRET))
+	tokenString, err := token.SignedString(getJWTSecret())
 	if err != nil {
 		return "", errors.New("JWT署名エラー")
 	}
@@ -54,7 +61,7 @@ func ValidateToken(tokenString string) (uuid.UUID, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Method)
 		}
 		// シークレットキーを返します
-		return []byte(JWT_SECRET), nil
+		return getJWTSecret(), nil
 	})
 
 	if err != nil {
