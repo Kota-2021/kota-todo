@@ -20,6 +20,11 @@ RUN go build -o /app/bin/api ./cmd/api
 # 実行ステージ
 FROM alpine:latest
 
+# --- タイムゾーンデータをインストール ---
+RUN apk add --no-cache tzdata
+# タイムゾーンを設定
+ENV TZ=Asia/Tokyo
+
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
