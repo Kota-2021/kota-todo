@@ -228,6 +228,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "AWS_REGION"
           value = data.aws_region.current.name
+        },
+        {
+          // valueは何でも良いが、推測されにくい文字列を使用すること。
+          name = "JWT_SECRET", value = "your-portfolio-secret-key-2025-aujg93jsfiu9je" 
         }
         # 注意: DB_PASSWORDは機密情報のため、本番環境では必ずSecrets Managerを使用すること
         # 開発環境では環境変数として設定（セキュリティリスクがあるため本番では非推奨）
@@ -283,7 +287,8 @@ resource "aws_ecs_task_definition" "main" {
         { name = "REDIS_HOST", value = aws_elasticache_cluster.main.cache_nodes[0].address },
         { name = "REDIS_PORT", value = tostring(aws_elasticache_cluster.main.port) },
         { name = "SQS_QUEUE_URL", value = aws_sqs_queue.main.url },
-        { name = "MODE", value = "worker" } # Go側で「Workerとして動く」ことを判別させるための変数
+        { name = "MODE", value = "worker" }, # Go側で「Workerとして動く」ことを判別させるための変数
+        { name = "JWT_SECRET", value = "your-portfolio-secret-key-2025-aujg93jsfiu9je" } # valueは何でも良いが、推測されにくい文字列を使用すること。
       ]
 
       secrets = [
