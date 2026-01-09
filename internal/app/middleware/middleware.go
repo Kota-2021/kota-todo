@@ -35,7 +35,11 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 検証
 		userID, err := auth.ValidateToken(tokenString)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			// 💡 エラー内容をレスポンスに含める（デバッグ用）
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":       "Invalid token",
+				"debug_cause": err.Error(), // ← これで「署名ミス」か「期限切れ」か判明します
+			})
 			return
 		}
 
