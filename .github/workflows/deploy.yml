@@ -27,7 +27,7 @@ jobs:
         env:
           POSTGRES_USER: portfolio_admin
           POSTGRES_DB: portfolio_db
-          POSTGRES_PASSWORD: password
+          POSTGRES_PASSWORD: local_dev_password
         ports:
           - 5432:5432
         options: >-
@@ -110,7 +110,7 @@ jobs:
           DB_HOST: localhost
           DB_PORT: 5432
           DB_USER: portfolio_admin
-          DB_PASSWORD: password
+          DB_PASSWORD: local_dev_password
           DB_NAME: portfolio_db
           DB_SSLMODE: disable
           REDIS_HOST: localhost

@@ -17,7 +17,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		// デフォルトのテスト用接続先（docker-composeの設定に合わせる）
-		dsn = "host=localhost user=postgres password=postgres dbname=portfolio_db port=5432 sslmode=disable"
+		dsn = "host=localhost user=portfolio_admin password=local_dev_password dbname=portfolio_db port=5432 sslmode=disable"
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
