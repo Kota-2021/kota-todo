@@ -51,6 +51,7 @@ private_key.pem
 
 # --- ignore files and directories ---
 ignores/
+.0-ignores/
 
 # --- cursor files and directories ---
 .cursor/

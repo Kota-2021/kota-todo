@@ -25,17 +25,25 @@ import (
 
 // setupDatabase はDB接続の確立、テスト、マイグレーションを行います
 func setupDatabase() *gorm.DB {
+
 	log.Println("=== データベース接続開始 ===")
 
-	// ローカルでの開発用.envファイルの読み込み以下を有効化する事
+	// ローカルでの開発用.envファイルの読み込み
 	currentPath, errEnv := os.Getwd()
 	if errEnv != nil {
 		log.Fatal("Error getting current path")
 	}
 	envFilePath := currentPath + "/.env"
-	errEnv = godotenv.Load(envFilePath)
-	if errEnv != nil {
-		log.Fatal("Error loading .env file")
+
+	if _, err := os.Stat(envFilePath); err == nil {
+		errEnv := godotenv.Load(envFilePath)
+		if errEnv != nil {
+			log.Printf("Notice: .env file found at %s but could not be loaded: %v", envFilePath, errEnv)
+		} else {
+			log.Println("✓ .env file loaded successfully")
+		}
+	} else {
+		log.Println("Notice: .env file not found, skipping. (This is normal in production)")
 	}
 	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
 
@@ -126,30 +134,17 @@ func main() {
 		log.Fatal("Error getting current path")
 	}
 	envFilePath := currentPath + "/.env"
-	err = godotenv.Load(envFilePath)
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if _, err := os.Stat(envFilePath); err == nil {
+		godotenv.Load(envFilePath)
 	}
 	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
+
+	// --- SQS関連の環境変数チェック (共通) ---
 	region := os.Getenv("AWS_REGION")
 	queueURL := os.Getenv("SQS_QUEUE_URL")
+	queueName := os.Getenv("SQS_QUEUE_NAME")
 	if region == "" || queueURL == "" {
 		log.Println("Warning: AWS_REGION or SQS_QUEUE_URL is not set. Worker may not function correctly.")
-	}
-
-	// 2. 依存性の注入（DI）と各層の初期化
-	// Task Handlerを先に初期化できるように、UserとTaskの両方の依存性をここで定義
-
-	// --- SQS/Worker 関連の初期化 ---
-	// 環境変数からキュー名を取得
-	queueName := os.Getenv("SQS_QUEUE_NAME")
-
-	// --- 非同期ワーカーの依存性 ---
-	// SQSクライアントを初期化
-	sqsClient, err := aws.NewSQSClient(ctx, queueName)
-	if err != nil {
-		log.Printf("SQS初期化失敗: %v", err)
-		// 本番環境では Fatalf にする検討も必要ですが、まずは実行を優先
 	}
 
 	// --- 依存性の注入（DI）と各層の初期化 ---
@@ -163,50 +158,66 @@ func main() {
 	notiService := service.NewNotificationService(notiRepo)
 	notificationHandler := handler.NewNotificationHandler(notiService, hub)
 
+	// --- 非同期ワーカーの依存性 ---
+	// SQSクライアントを初期化
+	sqsClient, err := aws.NewSQSClient(ctx, queueName)
+	if err != nil {
+		log.Printf("SQS初期化失敗: %v", err)
+		// 本番環境では Fatalf にする検討も必要ですが、まずは実行を優先
+	}
+
 	// WorkerService を初期化 (taskRepoを渡すことで、二重送信防止の更新を可能にする)
 	workerService := service.NewWorkerService(sqsClient, taskRepo, notiService, hub)
 	taskService := service.NewTaskService(taskRepo, workerService)
 	taskHandler := handler.NewTaskHandler(taskService)
 
-	// NotificationHandler の初期化
-	// notificationHandler := handler.NewNotificationHandler(hub) // 260108byKota
+	// ==========================================
+	// ここから分岐処理
+	// ==========================================
+	mode := os.Getenv("MODE")
 
-	// 3. ルーター設定とハンドラーの紐づけ
-	r := router.SetupRouter(authHandler, taskHandler, notificationHandler, rdb)
+	if mode == "worker" {
+		// --- 【Workerモード】 ---
+		log.Println("🚾 Starting in WORKER mode...")
 
-	// ヘルスチェックエンドポイントの追加（ALB/ECS用）
-	r.GET("/health", func(c *gin.Context) {
-		// DB接続もテスト
-		sqlDB, _ := db.DB()
-		if sqlDB.Ping() != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "db_connected": false})
-			return
+		if sqsClient != nil {
+			// WatcherとWorkerをバックグラウンドではなく、メインスレッドを維持する形で実行
+			go workerService.StartTaskWatcher(ctx)
+
+			log.Println("✓ Worker service is polling SQS...")
+			// StartWorker は中で無限ループしている想定のため、ここでプロセスをブロックする
+			workerService.StartWorker(ctx)
+		} else {
+			log.Fatal("Worker mode failed: SQS client is nil")
 		}
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
-	})
 
-	// --- 非同期ワーカーの起動 ---
-	// サーバー起動 (r.Run) の前に Go ルーチンで走らせる
-	if sqsClient != nil {
+	} else {
+		// --- 【API/Defaultモード】 ---
+		log.Println("🅰️ Starting in API server mode...")
 
-		// A: SQSからメッセージを受信して処理する側
-		go workerService.StartWorker(ctx)
+		// ルーター設定
+		r := router.SetupRouter(authHandler, taskHandler, notificationHandler, rdb)
 
-		// B: DBを監視して期限間近なタスクをSQSへ送る側 (二重送信防止ロジックを含む)
-		go workerService.StartTaskWatcher(ctx)
+		// ヘルスチェック
+		r.GET("/health", func(c *gin.Context) {
+			sqlDB, _ := db.DB()
+			if sqlDB.Ping() != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "db_connected": false})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
+		})
 
-		log.Println("✓ Background workers started (Watcher & Worker)")
-	}
+		// サーバー起動
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		serverAddr := ":" + port
 
-	// 4. サーバー起動
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	serverAddr := ":" + port
-
-	log.Printf("Starting API server on http://localhost%s", serverAddr)
-	if err := r.Run(serverAddr); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server stopped unexpectedly: %v", err)
+		log.Printf("Starting API server on http://localhost%s", serverAddr)
+		if err := r.Run(serverAddr); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server stopped unexpectedly: %v", err)
+		}
 	}
 }

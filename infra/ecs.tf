@@ -261,6 +261,44 @@ resource "aws_ecs_task_definition" "main" {
 
       # 必須設定
       essential = true
+    },
+    # --- 【新規追加】Workerコンテナ (worker) ---
+    {
+      name  = "${var.project_name}-worker" # ここが GitHub Actions で指定するコンテナ名になります
+      image = var.app_image_uri           # APIと同じイメージを使用
+      
+      # WorkerはHTTPを受け付けないため portMappings は不要です
+      
+      # 環境変数は API とほぼ同じものが必要（SQSやDBにアクセスするため）
+      environment = [
+        { name = "DB_HOST", value = aws_db_instance.main.address },
+        { name = "DB_PORT", value = tostring(aws_db_instance.main.port) },
+        { name = "DB_USER", value = aws_db_instance.main.username },
+        { name = "DB_NAME", value = "portfolio_db" },
+        { name = "DB_SSLMODE", value = "require" },
+        { name = "REDIS_HOST", value = aws_elasticache_cluster.main.cache_nodes[0].address },
+        { name = "REDIS_PORT", value = tostring(aws_elasticache_cluster.main.port) },
+        { name = "SQS_QUEUE_URL", value = aws_sqs_queue.main.url },
+        { name = "MODE", value = "worker" } # Go側で「Workerとして動く」ことを判別させるための変数
+      ]
+
+      secrets = [
+        {
+          name      = "DB_PASSWORD"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "worker"
+        }
+      }
+
+      essential = true
     }
   ])
 

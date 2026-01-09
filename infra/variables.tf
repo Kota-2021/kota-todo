@@ -46,3 +46,10 @@ variable "app_image_uri" {
   type        = string
   default     = "public.ecr.aws/amazonlinux/amazon-linux-for-container:latest" // エラー回避策としてデフォルト値を追加
 }
+
+// WorkerコンテナのイメージURI
+variable "worker_image_uri" {
+  description = "ECR image URI for the worker container"
+  type        = string
+  default     = ""
+}
