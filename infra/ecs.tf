@@ -224,6 +224,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "SQS_QUEUE_URL"
           value = aws_sqs_queue.main.url
+        },
+        {
+          name  = "AWS_REGION"
+          value = data.aws_region.current.name
         }
         # 注意: DB_PASSWORDは機密情報のため、本番環境では必ずSecrets Managerを使用すること
         # 開発環境では環境変数として設定（セキュリティリスクがあるため本番では非推奨）

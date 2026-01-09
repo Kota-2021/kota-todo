@@ -1,3 +1,4 @@
+// internal/infrastructure/aws/sqs.go
 package aws
 
 import (
@@ -16,18 +17,28 @@ type SQSClient struct {
 	QueueUrl string
 }
 
-// internal/infrastructure/aws/sqs.go
-
 func NewSQSClient(ctx context.Context, queueName string) (*SQSClient, error) {
+
+	// ローカル開発用
 	endpoint := os.Getenv("AWS_ENDPOINT")
 	region := os.Getenv("AWS_REGION")
 
-	staticProvider := credentials.NewStaticCredentialsProvider("test", "test", "")
+	// Terraformから渡されるURL
+	queueUrl := os.Getenv("SQS_QUEUE_URL")
 
-	cfg, err := config.LoadDefaultConfig(ctx,
+	// オプションをスライスで管理
+	opts := []func(*config.LoadOptions) error{
 		config.WithRegion(region),
-		config.WithCredentialsProvider(staticProvider),
-	)
+	}
+
+	// LocalStack(endpointがある)の場合だけ、偽の認証情報を使う
+	if endpoint != "" {
+		opts = append(opts, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("test", "test", ""),
+		))
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("AWS設定の読み込みに失敗しました: %w", err)
 	}
@@ -38,11 +49,12 @@ func NewSQSClient(ctx context.Context, queueName string) (*SQSClient, error) {
 		}
 	})
 
-	actualQueueUrl := "http://localhost:4566/000000000000/portfolio-notifications"
-	fmt.Printf("✓ SQS Worker targeting: %s\n", actualQueueUrl)
+	// デバッグ用ログ
+	fmt.Printf("✓ SQS client initialized. Target Queue: %s\n", queueUrl)
 
 	return &SQSClient{
 		Client:   client,
-		QueueUrl: actualQueueUrl,
+		QueueUrl: queueUrl,
 	}, nil
+
 }
