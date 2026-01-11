@@ -20,6 +20,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	// すべての接続を許可する（開発用）
+	// ブラウザからws接続する為に必要
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
