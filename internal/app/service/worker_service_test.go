@@ -39,13 +39,15 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379", // init()で設定した環境変数を使ってもOK
 	})
-	hub := NewNotificationHub(rdb)
-
-	// Hubを起動 (Redisとの通信待機状態にする)
-	go hub.Run(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	hub := NewNotificationHub(rdb)
+	go hub.Run(ctx)
+
+	// Hubを起動 (Redisとの通信待機状態にする)
+	// go hub.Run(context.Background())
 
 	// WorkerService の作成
 	workerService := NewWorkerService(sqsClient, taskRepo, notiService, hub)
@@ -90,6 +92,6 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	}
 
 	// ReceiveMessageのブロックが解けるのを待つためのわずかな猶予
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 
 }
