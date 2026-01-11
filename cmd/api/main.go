@@ -102,6 +102,7 @@ func setupDatabase() *gorm.DB {
 func main() {
 	// 1. ログと環境変数の初期設定
 	initLogger()
+	fmt.Println("INFO: API process started - Preparing for initialization...")
 	loadEnv()
 
 	// 2. 基盤 Context と DB 初期化
