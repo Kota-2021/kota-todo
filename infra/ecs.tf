@@ -96,8 +96,6 @@ resource "aws_iam_role_policy_attachment" "ecs_secrets_attachment" {
   policy_arn = aws_iam_policy.ecs_secrets_policy.arn
 }
 
-# CloudWatch Logsにログを送信する権限（上記ポリシーに含まれているが、明示的に追加可能）
-# AmazonECSTaskExecutionRolePolicyに既に含まれているため、追加不要
 
 # ----------------------------------------------------
 # 4. IAMロール: ECSタスクロール (アプリケーションが使用)
@@ -181,8 +179,7 @@ resource "aws_ecs_task_definition" "main" {
     {
       name  = "${var.project_name}-api"
       image     = var.app_image_uri,
-      # image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${aws_ecr_repository.main.name}:latest"
-      
+
       # ポートマッピング
       portMappings = [
         {
@@ -241,13 +238,11 @@ resource "aws_ecs_task_definition" "main" {
       secrets = [
         {
           name      = "DB_PASSWORD"
-          valueFrom = "arn:aws:secretsmanager:ap-northeast-1:562363199999:secret:my-portfolio-2025/db-password-BZRQdD:password::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
         },
         {
           name      = "JWT_SECRET"
-          valueFrom = "arn:aws:secretsmanager:ap-northeast-1:562363199999:secret:my-portfolio-2025/jwt-secret-b1NLHE:jwt_key::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 
@@ -297,13 +292,11 @@ resource "aws_ecs_task_definition" "main" {
       secrets = [
         {
           name      = "DB_PASSWORD"
-          valueFrom = "arn:aws:secretsmanager:ap-northeast-1:562363199999:secret:my-portfolio-2025/db-password-BZRQdD:password::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
         },
         {
           name      = "JWT_SECRET"
-          valueFrom = "arn:aws:secretsmanager:ap-northeast-1:562363199999:secret:my-portfolio-2025/jwt-secret-b1NLHE:jwt_key::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 
