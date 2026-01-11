@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"log/slog"
 	"my-portfolio-2025/internal/app/models"
 	"sync"
@@ -55,64 +55,76 @@ func NewNotificationHub(redisClient *redis.Client) *NotificationHub {
 
 // Run はハブのメインループを実行します（Goルーチンとして起動）
 func (h *NotificationHub) Run(ctx context.Context) {
-	log.Println("Notification Hub is running...")
+	slog.Info("Notification Hub is running...")
 
-	pubsub := h.redisClient.Subscribe(ctx, "notifications")
-	defer pubsub.Close()
+	// --- 1. Redis監視ループを独立したGoroutineで動かす (以前の SubscribeRedis 相当) ---
+	go func() {
+		pubsub := h.redisClient.Subscribe(ctx, "notifications")
+		defer pubsub.Close()
+		ch := pubsub.Channel()
+		slog.Info("Subscribed to Redis notifications")
 
-	ch := pubsub.Channel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				// 受信ログ (Debug)
+				fmt.Printf("DEBUG: Received something from Redis: %s\n", msg.Payload)
 
+				var notif models.NotificationMessage
+				if err := json.Unmarshal([]byte(msg.Payload), &notif); err != nil {
+					slog.Error("Failed to unmarshal Redis message", "error", err)
+					continue
+				}
+
+				// 独立した外側から Broadcast チャネルへ流し込む
+				h.Broadcast <- &notif
+			}
+		}
+	}()
+
+	// --- 2. Hub管理ループ (以前の Run 相当) ---
 	for {
 		select {
-		// 1. 終了信号の受信
 		case <-ctx.Done():
 			slog.Info("Notification Hub shutting down")
 			return
 
-		// 2. Redis（外部）からメッセージが届いた時
-		case msg := <-ch:
-			if msg == nil {
-				continue
-			}
-
-			// ここで解析（Unmarshal）を行う
-			var notif models.NotificationMessage
-			if err := json.Unmarshal([]byte(msg.Payload), &notif); err != nil {
-				slog.Error("Failed to unmarshal Redis message", "error", err)
-				continue
-			}
-
-			// 内部の配信用チャネル（Broadcast）へ転送する
-			// これにより、下の "case msg := <-h.Broadcast" が起動します
-			h.Broadcast <- &notif
-
-		// 3. クライアントの新規接続
 		case reg := <-h.Register:
 			h.mu.Lock()
 			h.clients[reg.UserID] = reg.Conn
 			h.mu.Unlock()
-			log.Printf("User %s connected via WebSocket", reg.UserID)
+			slog.Info("User connected", "userID", reg.UserID)
 
-		// 4. クライアントの切断
 		case userID := <-h.Unregister:
 			h.mu.Lock()
 			if conn, ok := h.clients[userID]; ok {
 				conn.Close()
 				delete(h.clients, userID)
-				log.Printf("User %s disconnected", userID)
+				slog.Info("User disconnected", "userID", userID)
 			}
 			h.mu.Unlock()
 
-		// 5. クライアントへの実際の配信
 		case msg := <-h.Broadcast:
+			// 配信ログを追加
+			slog.Info("Attempting to broadcast message", "targetUserID", msg.UserID)
+
 			h.mu.Lock()
 			if conn, ok := h.clients[msg.UserID]; ok {
 				err := conn.WriteJSON(msg)
 				if err != nil {
-					log.Printf("Error sending message to user %s: %v", msg.UserID, err)
+					slog.Error("Failed to send WebSocket message", "userID", msg.UserID, "error", err)
 					conn.Close()
 					delete(h.clients, msg.UserID)
+				} else {
+					slog.Info("✅ Notification sent successfully", "userID", msg.UserID)
 				}
+			} else {
+				slog.Warn("Recipient not found in active connections", "userID", msg.UserID)
 			}
 			h.mu.Unlock()
 		}

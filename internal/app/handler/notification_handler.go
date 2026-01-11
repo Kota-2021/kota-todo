@@ -19,6 +19,10 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	// すべての接続を許可する（開発用）
+	// CheckOrigin: func(r *http.Request) bool {
+	// 	return true
+	// },
 }
 
 type NotificationHandler struct {
@@ -56,22 +60,25 @@ func (h *NotificationHandler) handleError(c *gin.Context, err error) {
 
 // HandleWS WebSocket接続の受付
 func (h *NotificationHandler) HandleWS(c *gin.Context) {
-	// WebSocketはHTTPレスポンスを返せないため、slogでの記録が主体となる
-	slog.Info("WebSocket handshake started")
+	// 1. 認証チェック
+	// AuthMiddlewareが正常に機能し、コンテキストにuserIDが入っていることが前提です
+	val, ok := c.Get("userID")
+	if !ok {
+		slog.Warn("WebSocket unauthorized: userID not found in context")
+		// 接続をアップグレードする前に 401 を返して拒否します
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	userID := val.(uuid.UUID)
 
+	// 2. アップグレード
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("WebSocket upgrade failed", "error", err)
 		return
 	}
 
-	userID, ok := c.MustGet("userID").(uuid.UUID)
-	if !ok {
-		slog.Warn("WebSocket unauthorized: userID not found in context")
-		conn.Close()
-		return
-	}
-
+	// 3. Hubへの登録
 	h.hub.Register <- &service.ClientRegistration{
 		UserID: userID,
 		Conn:   conn,
@@ -84,17 +91,11 @@ func (h *NotificationHandler) HandleWS(c *gin.Context) {
 		conn.Close()
 	}()
 
+	// 4. メッセージ待機ループ (接続維持のため)
 	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			// 切断は通常エラーとして扱わない（CloseFrameなどのため）
+		if _, _, err := conn.ReadMessage(); err != nil {
 			break
 		}
-		slog.Debug("WebSocket message received",
-			"userID", userID,
-			"type", messageType,
-			"payload", string(p),
-		)
 	}
 }
 
