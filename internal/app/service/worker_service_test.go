@@ -36,9 +36,12 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	taskRepo := repository.NewTaskRepository(db)
 	notiRepo := repository.NewNotificationRepository(db)
 	notiService := NewNotificationService(notiRepo)
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379", // init()で設定した環境変数を使ってもOK
 	})
+	defer rdb.Close()
+
 	hub := NewNotificationHub(rdb)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -85,11 +88,12 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	// 【修正ポイント】アサーションの前に即座にキャンセルを呼ぶ
 	cancel()
 
+	time.Sleep(1 * time.Second)
+
 	if !success {
 		t.Fatal("タイムアウト: 通知がDBに保存されませんでした")
 	}
 
-	// ReceiveMessageのブロックが解けるのを待つためのわずかな猶予
-	time.Sleep(500 * time.Millisecond)
+	t.Log("Integration test finished successfully")
 
 }
