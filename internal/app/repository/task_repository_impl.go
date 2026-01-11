@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"my-portfolio-2025/internal/app/models"
 	"time"
 
@@ -20,60 +21,49 @@ func NewTaskRepository(db *gorm.DB) TaskRepository {
 }
 
 // Create: 新しいタスクをDBに保存します。
+// エラー発生時にコンテキストを付与して返す
 func (r *taskRepositoryImpl) Create(task *models.Task) error {
-	// GormのCreateメソッドを呼び出し、データベースにレコードを挿入します。
-	result := r.db.Create(task)
-	return result.Error
+	if err := r.db.Create(task).Error; err != nil {
+		return fmt.Errorf("taskRepository.Create: %w", err)
+	}
+	return nil
 }
 
 // FindAllByUserID: 特定のユーザーIDに紐づく全てのタスクをリストで取得します。
 func (r *taskRepositoryImpl) FindAllByUserID(userID uuid.UUID) ([]models.Task, error) {
 	var tasks []models.Task
-	// Where条件を使って、UserIDが一致するレコードのみをフィルタリングします。
-	result := r.db.Where("user_id = ?", userID).Find(&tasks)
-
-	if result.Error != nil {
-		// レコードが見つからない場合もエラーとして扱わず、空のスライスとnilを返すことが多いですが、
-		// ここではGormのDBエラーがあれば返します。
-		if result.Error == gorm.ErrRecordNotFound {
-			return tasks, nil // 見つからない場合は空のリストを返す
-		}
-		return nil, result.Error
+	// GORMのFindはレコードが見つからない場合に gorm.ErrRecordNotFound を返しません（空のスライスになる仕様）。
+	// そのため、ここではDB接続エラー等の致命的なエラーのみをチェックします。
+	if err := r.db.Where("user_id = ?", userID).Find(&tasks).Error; err != nil {
+		return nil, fmt.Errorf("taskRepository.FindAllByUserID (userID=%s): %w", userID, err)
 	}
 	return tasks, nil
 }
 
-// FindByID: IDでタスクを検索します。（認可チェックはService層で行うため、ここでは単純に検索します）
+// FindByID: IDでタスクを検索します。
 func (r *taskRepositoryImpl) FindByID(taskID uuid.UUID) (*models.Task, error) {
 	var task models.Task
-	// Firstは主キーでレコードを検索します。
-	result := r.db.First(&task, taskID)
-
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			return nil, nil // 見つからなかった場合はnilを返す
-		}
-		return nil, result.Error
+	// Firstはレコードが見つからない場合に gorm.ErrRecordNotFound を返します。
+	if err := r.db.First(&task, taskID).Error; err != nil {
+		return nil, fmt.Errorf("taskRepository.FindByID (taskID=%s): %w", taskID, err)
 	}
 	return &task, nil
 }
 
 // Update: Taskモデルの変更をDBに保存します。
 func (r *taskRepositoryImpl) Update(task *models.Task) error {
-	// GormのSaveメソッドは、主キー（ID）に基づいてレコードが存在すれば更新、存在しなければ挿入を行います。
-	// 今回はService層で存在チェック済みなので、更新として機能します。
-	result := r.db.Save(task)
-	return result.Error
+	if err := r.db.Save(task).Error; err != nil {
+		return fmt.Errorf("taskRepository.Update (taskID=%s): %w", task.ID, err)
+	}
+	return nil
 }
 
 // Delete: IDを指定してタスクを削除します。
 func (r *taskRepositoryImpl) Delete(taskID uuid.UUID) error {
-	// GormのDeleteメソッドを呼び出す。
-	// models.Taskがgorm.Modelを含んでいるため、これはデフォルトでソフトデリート（論理削除）になります。
-	// 物理削除したい場合は、r.db.Unscoped().Delete(...) を使用する必要がありますが、
-	// 通常はソフトデリートが推奨されます。
-	result := r.db.Delete(&models.Task{}, taskID)
-	return result.Error
+	if err := r.db.Delete(&models.Task{}, taskID).Error; err != nil {
+		return fmt.Errorf("taskRepository.Delete (taskID=%s): %w", taskID, err)
+	}
+	return nil
 }
 
 // FindUpcomingTasks: 指定した日付より前の期限のタスクを取得 (期限切れチェック用)
@@ -82,18 +72,24 @@ func (r *taskRepositoryImpl) FindUpcomingTasks(ctx context.Context, threshold ti
 	now := time.Now()
 
 	err := r.db.WithContext(ctx).
-		// Where("due_date <= ? AND is_completed = ? AND (last_notified_at IS NULL OR last_notified_at < ? - INTERVAL '1 hour')", threshold, false, now).
-		// Status が "completed"（完了）ではないものを対象にする
 		Where("due_date <= ? AND status != ? AND (last_notified_at IS NULL OR last_notified_at < ?)",
 			threshold, models.TaskStatusCompleted, now.Add(-1*time.Hour)).
 		Find(&tasks).Error
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("taskRepository.FindUpcomingTasks: %w", err)
 	}
 	return tasks, nil
 }
 
 // UpdateLastNotifiedAt: 通知完了時刻を更新する
 func (r *taskRepositoryImpl) UpdateLastNotifiedAt(ctx context.Context, taskID uuid.UUID, notifiedAt time.Time) error {
-	return r.db.WithContext(ctx).Model(&models.Task{}).Where("id = ?", taskID).Update("last_notified_at", notifiedAt).Error
+	err := r.db.WithContext(ctx).Model(&models.Task{}).
+		Where("id = ?", taskID).
+		Update("last_notified_at", notifiedAt).Error
+
+	if err != nil {
+		return fmt.Errorf("taskRepository.UpdateLastNotifiedAt (taskID=%s): %w", taskID, err)
+	}
+	return nil
 }

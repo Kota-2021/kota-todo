@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository" // Repository層をインポート
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // TaskServiceImpl は TaskService インターフェースの具体的な実装です。
@@ -26,39 +29,42 @@ func NewTaskService(repo repository.TaskRepository, workerService *WorkerService
 
 // CreateTask: タスク作成のビジネスロジック
 func (s *TaskServiceImpl) CreateTask(userID uuid.UUID, req *models.TaskCreateRequest) (*models.Task, error) {
-	// 1. DTOからModelへの変換とUserIDのセット
+
+	// 入力バリデーション
+	if req.Title == "" {
+		return nil, fmt.Errorf("%w: title is required", apperr.ErrValidation)
+	}
+
 	task := &models.Task{
-		UserID:      userID, // JWTミドルウェアから渡されたUserIDを設定
+		UserID:      userID,
 		Title:       req.Title,
 		Description: req.Description,
 		DueDate:     req.DueDate,
 		Status:      models.TaskStatusPending,
 	}
 
-	// 2. Repositoryを呼び出し、DBに保存
-	err := s.taskRepo.Create(task)
-	if err != nil {
-		return nil, err
+	if err := s.taskRepo.Create(task); err != nil {
+		return nil, fmt.Errorf("TaskService.CreateTask: %w", err)
 	}
 	return task, nil
 }
 
 // GetTaskByID: タスク詳細取得のビジネスロジックと認可チェック
 func (s *TaskServiceImpl) GetTaskByID(userID uuid.UUID, taskID uuid.UUID) (*models.Task, error) {
-	// 1. Repositoryを呼び出し、タスクを検索
 	task, err := s.taskRepo.FindByID(taskID)
 	if err != nil {
-		return nil, err
-	}
-	if task == nil {
-		return nil, errors.New("task not found") // タスクが存在しない
+		// DBのNotFoundをapperr.ErrNotFoundに変換
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("%w: taskID %s", apperr.ErrNotFound, taskID)
+		}
+		// その他のエラーはそのまま返す
+		return nil, fmt.Errorf("TaskService.GetTaskByID: %w", err)
 	}
 
-	// 2. 認可チェック: タスクの所有者か確認（最も重要！）
+	// 認可チェック: タスクの所有者か確認
 	if task.UserID != userID {
-		// ログ出力: 認可違反の試行
-		// エラーを返すことで、タスク詳細の取得を拒否します
-		return nil, errors.New("forbidden: task does not belong to user")
+		// 後のslog導入時にWarnログとして出力対象。ここではapperr.ErrForbiddenをラップ。
+		return nil, fmt.Errorf("%w: user %s has no permission for task %s", apperr.ErrForbidden, userID, taskID)
 	}
 
 	return task, nil
@@ -66,36 +72,21 @@ func (s *TaskServiceImpl) GetTaskByID(userID uuid.UUID, taskID uuid.UUID) (*mode
 
 // GetTasks: 特定のユーザーのタスクリストを取得。
 func (s *TaskServiceImpl) GetTasks(userID uuid.UUID) ([]models.Task, error) {
-	// 認可チェックはRepository層のFindAllByUserIDに委譲（UserIDでフィルタリングされるため）
-	// Service層の役割はシンプルにRepositoryを呼び出すこと
 	tasks, err := s.taskRepo.FindAllByUserID(userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("TaskService.GetTasks: %w", err)
 	}
-
-	// 必要に応じてここでタスクのソートや整形などのビジネスロジックを適用
-
 	return tasks, nil
 }
 
 // UpdateTask: タスクの更新と認可チェック
 func (s *TaskServiceImpl) UpdateTask(userID uuid.UUID, taskID uuid.UUID, req *models.TaskUpdateRequest) (*models.Task, error) {
-	// 1. タスクの存在確認と認可チェック（GetTaskByIDと同様の処理が必要）
-	task, err := s.taskRepo.FindByID(taskID)
+	// GetTaskByIDを呼ぶことで、存在チェックと認可を一括で行う
+	task, err := s.GetTaskByID(userID, taskID)
 	if err != nil {
-		return nil, err
-	}
-	if task == nil {
-		return nil, errors.New("task not found")
+		return nil, err // apperr.ErrNotFound か apperr.ErrForbidden が返る
 	}
 
-	// 2. 認可チェック: タスクの所有者か確認（最重要！）
-	if task.UserID != userID {
-		return nil, errors.New("forbidden: task does not belong to user")
-	}
-
-	// 3. 更新データの適用: リクエストがあったフィールドのみをモデルに適用（Go特有の処理）
-	// DTOのフィールドがnilでない場合（つまりリクエストに含まれていた場合）のみ、モデルの値を更新します。
 	if req.Title != nil {
 		task.Title = *req.Title
 	}
@@ -109,47 +100,37 @@ func (s *TaskServiceImpl) UpdateTask(userID uuid.UUID, taskID uuid.UUID, req *mo
 		task.Status = *req.Status
 	}
 
-	// 4. Repositoryを呼び出し、DBを更新
-	err = s.taskRepo.Update(task) // taskオブジェクト全体を渡して更新
-	if err != nil {
-		return nil, err
+	if err := s.taskRepo.Update(task); err != nil {
+		return nil, fmt.Errorf("TaskService.UpdateTask: %w", err)
 	}
 
-	return task, nil // 更新されたタスクを返す
+	return task, nil
 }
 
 // DeleteTask: タスクを削除します。認可チェックが必須です。
 func (s *TaskServiceImpl) DeleteTask(userID uuid.UUID, taskID uuid.UUID) error {
-	// 1. 認可チェックのためにタスクを取得
-	task, err := s.taskRepo.FindByID(taskID)
-	if err != nil {
-		return err // DBエラー
-	}
-	if task == nil {
-		return errors.New("task not found")
+	if _, err := s.GetTaskByID(userID, taskID); err != nil {
+		return err
 	}
 
-	// 2. 認可チェック: タスクの所有者か確認（最重要！）
-	if task.UserID != userID {
-		// 他人のタスクは削除できない
-		return errors.New("forbidden: task does not belong to user")
+	if err := s.taskRepo.Delete(taskID); err != nil {
+		return fmt.Errorf("TaskService.DeleteTask: %w", err)
 	}
-
-	// 3. 認可OK: Repositoryを呼び出して削除を実行
-	return s.taskRepo.Delete(taskID)
+	return nil
 }
 
 // CheckAndQueueDeadlines: 期限切れのタスクをチェックしてSQSにキューイングする
 func (s *TaskServiceImpl) CheckAndQueueDeadlines(ctx context.Context) error {
-	// 1時間以内に期限が来るタスクを取得する
 	tasks, err := s.taskRepo.FindUpcomingTasks(ctx, time.Now().Add(1*time.Hour))
 	if err != nil {
-		return err
+		return fmt.Errorf("TaskService.CheckAndQueueDeadlines: %w", err)
 	}
 
 	for _, task := range tasks {
-		// SQSにジョブを投入
-		s.workerService.SendTaskNotification(ctx, task.ID, task.UserID, "期限が近づいています")
+		// ジョブ投入時のエラーは全体を止めないようログ出力（後にslogへ）
+		if err := s.workerService.SendTaskNotification(ctx, task.ID, task.UserID, "期限が近づいています"); err != nil {
+			fmt.Printf("failed to queue notification for task %s: %v\n", task.ID, err)
+		}
 	}
 	return nil
 }

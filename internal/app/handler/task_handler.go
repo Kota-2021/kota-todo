@@ -2,10 +2,13 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/service" // Service層をインポート
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,15 +25,42 @@ func NewTaskHandler(s service.TaskService) *TaskHandler {
 	return &TaskHandler{taskService: s}
 }
 
+// handleError: README要件に基づきエラーレスポンスを一元管理するヘルパー
+func (h *TaskHandler) handleError(c *gin.Context, err error) {
+	var status int
+	var msg string
+
+	// errors.Is を使用して Service 層から返されたカスタムエラーを判定
+	switch {
+	case errors.Is(err, apperr.ErrNotFound):
+		status = http.StatusNotFound
+		msg = "指定されたタスクが見つかりません"
+	case errors.Is(err, apperr.ErrForbidden):
+		// 認可違反はセキュリティ上重要なので、この段階でログを出力（項目6の対応）
+		slog.Warn("Authorization violation attempt", "error", err)
+		status = http.StatusForbidden
+		msg = "この操作を行う権限がありません"
+	case errors.Is(err, apperr.ErrValidation):
+		status = http.StatusBadRequest
+		msg = err.Error() // バリデーション内容はユーザーに伝える
+	case errors.Is(err, apperr.ErrUnauthorized):
+		status = http.StatusUnauthorized
+		msg = "認証が必要です"
+	default:
+		// 内部エラーの詳細はユーザーに隠蔽しつつ、ログには残す（項目7の対応）
+		slog.Error("Internal server error", "error", err)
+		status = http.StatusInternalServerError
+		msg = "サーバー内部でエラーが発生しました"
+	}
+
+	c.JSON(status, gin.H{"error": msg})
+}
+
 // ユーザーID取得ヘルパー関数 (重要！)
 // JWTミドルウェアで c.Set("userID", userID) された値を取得します。
 func getUserIDFromContext(c *gin.Context) uuid.UUID {
-	// c.MustGetは値が設定されていない場合にパニックを引き起こしますが、
-	// AuthMiddlewareが先に実行されるため、安全に利用できます。
-	// MustGetの結果はinterface{}型なので、uint型にキャストが必要です。
 	userID, ok := c.MustGet("userID").(uuid.UUID)
 	if !ok {
-		// 通常はAuthMiddlewareで止まるため、ここは発生しない想定だが、念のためログ出力やエラー処理を検討
 		return uuid.Nil
 	}
 	return userID
@@ -38,181 +68,102 @@ func getUserIDFromContext(c *gin.Context) uuid.UUID {
 
 // TaskHandler.CreateTask: POST /tasks
 func (h *TaskHandler) CreateTask(c *gin.Context) {
-	// 1. JWTミドルウェアから認証済みユーザーIDを取得 (最も重要)
 	userID := getUserIDFromContext(c)
 	if userID == uuid.Nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		h.handleError(c, apperr.ErrUnauthorized)
 		return
 	}
 
-	// 2. リクエストボディをDTOにバインド（入力検証）
 	var req models.TaskCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.handleError(c, fmt.Errorf("%w: %v", apperr.ErrValidation, err))
 		return
 	}
 
-	// 3. Service層を呼び出し、タスク作成処理を委譲
 	task, err := h.taskService.CreateTask(userID, &req)
-
-	// 4. エラー処理
 	if err != nil {
-		// Service層からのエラーに応じて適切なHTTPステータスを返す
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+		h.handleError(c, err)
 		return
 	}
 
-	// 5. 成功レスポンスを返却
-	// HTTP 201 Created ステータスと、作成されたタスクデータを返す
 	c.JSON(http.StatusCreated, task)
 }
 
 // TaskHandler.GetTasks: GET /tasks (リスト取得)
 func (h *TaskHandler) GetTasks(c *gin.Context) {
-	// 1. JWTミドルウェアから認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
 	if userID == uuid.Nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		h.handleError(c, apperr.ErrUnauthorized)
 		return
 	}
 
-	// 2. Service層を呼び出し、ユーザーIDに紐づくタスクリストを取得
 	tasks, err := h.taskService.GetTasks(userID)
-
-	// 3. エラー処理
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		h.handleError(c, err)
 		return
 	}
 
-	// 4. 成功レスポンスを返却
-	// HTTP 200 OK ステータスと、タスクリストを返す
 	c.JSON(http.StatusOK, tasks)
 }
 
 // GetTaskByID: GET /tasks/:id (詳細取得)
 func (h *TaskHandler) GetTaskByID(c *gin.Context) {
-	// 1. JWTミドルウェアから認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == uuid.Nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
-		return
-	}
-
-	// 2. URLパスパラメータからタスクIDを取得
 	taskIDStr := c.Param("id")
 	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
+		h.handleError(c, fmt.Errorf("%w: invalid UUID", apperr.ErrValidation))
 		return
 	}
 
-	// 3. Service層を呼び出し、タスクを取得（Service層で認可チェックが行われる）
 	task, err := h.taskService.GetTaskByID(userID, taskID)
-
-	// 4. エラー処理
 	if err != nil {
-		// タスクが存在しない場合 ('task not found' error)
-		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()}) // 404 Not Found
-			return
-		}
-		// 認可エラーの場合 ('forbidden' error)
-		if strings.Contains(err.Error(), "forbidden") {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this task"}) // 403 Forbidden
-			return
-		}
-		// その他の内部エラー
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch task"})
+		h.handleError(c, err)
 		return
 	}
 
-	// 5. 成功レスポンスを返却
 	c.JSON(http.StatusOK, task)
 }
 
 // UpdateTask: PUT /tasks/:id (更新)
 func (h *TaskHandler) UpdateTask(c *gin.Context) {
-	// 1. 認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == uuid.Nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
-		return
-	}
-
-	// 2. URLパスパラメータからタスクIDを取得
 	taskIDStr := c.Param("id")
 	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
+		h.handleError(c, fmt.Errorf("%w: invalid UUID", apperr.ErrValidation))
 		return
 	}
 
-	// 3. リクエストボディをDTOにバインド
 	var req models.TaskUpdateRequest
-	// ShouldBindJSONは、空のリクエストボディでもエラーを返さないように設計されることが多いです。
-	// models.TaskUpdateRequestのフィールドをポインタ型にすることで、nilチェックが可能になります。
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.handleError(c, fmt.Errorf("%w: %v", apperr.ErrValidation, err))
 		return
 	}
 
-	// 4. Service層を呼び出し（Service層で認可と更新処理が行われる）
 	updatedTask, err := h.taskService.UpdateTask(userID, taskID, &req)
-
-	// 5. エラー処理
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()}) // 404 Not Found
-			return
-		}
-		if strings.Contains(err.Error(), "forbidden") {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to update this task"}) // 403 Forbidden
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
+		h.handleError(c, err)
 		return
 	}
 
-	// 6. 成功レスポンスを返却
-	c.JSON(http.StatusOK, updatedTask) // 更新成功は 200 OK
+	c.JSON(http.StatusOK, updatedTask)
 }
 
 // DeleteTask: DELETE /tasks/:id (削除)
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
-	// 1. 認証済みユーザーIDを取得
 	userID := getUserIDFromContext(c)
-	if userID == uuid.Nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
-		return
-	}
-
-	// 2. URLパスパラメータからタスクIDを取得
 	taskIDStr := c.Param("id")
 	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
+		h.handleError(c, fmt.Errorf("%w: invalid UUID", apperr.ErrValidation))
 		return
 	}
 
-	// 3. Service層を呼び出し（Service層で認可と削除処理が行われる）
-	err = h.taskService.DeleteTask(userID, taskID)
-
-	// 4. エラー処理
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()}) // 404 Not Found
-			return
-		}
-		if strings.Contains(err.Error(), "forbidden") {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to delete this task"}) // 403 Forbidden
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task"})
+	if err := h.taskService.DeleteTask(userID, taskID); err != nil {
+		h.handleError(c, err)
 		return
 	}
 
-	// 5. 成功レスポンスを返却
-	// 削除成功時は、コンテンツなし (204 No Content) を返すのがベストプラクティスです。
 	c.Status(http.StatusNoContent)
 }
