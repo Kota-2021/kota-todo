@@ -90,6 +90,6 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	}
 
 	// ReceiveMessageのブロックが解けるのを待つためのわずかな猶予
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 }
