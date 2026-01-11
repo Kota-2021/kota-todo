@@ -54,7 +54,6 @@ func NewNotificationHub(redisClient *redis.Client) *NotificationHub {
 }
 
 // Run はハブのメインループを実行します（Goルーチンとして起動）
-// Run はハブのメインループを実行します（Goルーチンとして起動）
 func (h *NotificationHub) Run(ctx context.Context) {
 	log.Println("Notification Hub is running...")
 
@@ -125,26 +124,4 @@ func (h *NotificationHub) PublishMessage(ctx context.Context, msg models.Notific
 	payload, _ := json.Marshal(msg)
 	// "notifications" チャンネルへ送信
 	return h.redisClient.Publish(ctx, "notifications", payload).Err()
-}
-
-// 2. Redisからの「購読」ループ（Hub.Run() などから Goルーチンで起動）
-func (h *NotificationHub) SubscribeRedis(ctx context.Context) {
-	pubsub := h.redisClient.Subscribe(ctx, "notifications")
-	defer pubsub.Close()
-
-	ch := pubsub.Channel()
-	log.Println("Subscribed to Redis notifications channel...")
-
-	for msg := range ch {
-		var notif models.NotificationMessage
-		if err := json.Unmarshal([]byte(msg.Payload), &notif); err != nil {
-			log.Printf("Failed to unmarshal Redis message: %v", err)
-			continue
-		}
-
-		// ★ポイント: Redisから受け取ったメッセージを Broadcast チャネルに投げる
-		// これにより、Run() メソッド内の case msg := <-h.Broadcast が反応し、
-		// 適切な WebSocket 接続に送信される。
-		h.Broadcast <- &notif
-	}
 }
