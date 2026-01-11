@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/testutils/mock"
 
@@ -295,8 +297,8 @@ func (s *TaskTestSuite) TestUpdateTask_Authorization() {
 
 	// エラーが発生し、かつそれが認可エラーであることを検証
 	assert.Error(t, err)
-	// エラーメッセージに "forbidden" など認可失敗を示す文字列が含まれていることを検証
-	assert.Contains(t, err.Error(), "forbidden")
+	// errors.Is()を使用してエラータイプを確認（より堅牢な方法）
+	assert.True(t, errors.Is(err, apperr.ErrForbidden), "エラーはErrForbiddenであるべき")
 
 	// taskオブジェクトがnilであることを検証
 	assert.Nil(t, updatedTask)
@@ -333,8 +335,8 @@ func (s *TaskTestSuite) TestDeleteTask_Authorization() {
 
 	// エラーが発生し、かつそれが認可エラーであることを検証
 	assert.Error(t, err)
-	// エラーメッセージに "forbidden" など認可失敗を示す文字列が含まれていることを検証
-	assert.Contains(t, err.Error(), "forbidden")
+	// errors.Is()を使用してエラータイプを確認（より堅牢な方法）
+	assert.True(t, errors.Is(err, apperr.ErrForbidden), "エラーはErrForbiddenであるべき")
 
 	// 4. モックの呼び出し検証
 	// FindByIDは呼ばれたが、Deleteは呼ばれなかったことを明示的に検証する
