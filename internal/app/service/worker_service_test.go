@@ -36,18 +36,16 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	taskRepo := repository.NewTaskRepository(db)
 	notiRepo := repository.NewNotificationRepository(db)
 	notiService := NewNotificationService(notiRepo)
-
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379", // init()で設定した環境変数を使ってもOK
 	})
-
 	hub := NewNotificationHub(rdb)
+
+	// Hubを起動 (Redisとの通信待機状態にする)
+	go hub.Run(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Hubを起動 (Redisとの通信待機状態にする)
-	go hub.Run(ctx)
 
 	// WorkerService の作成
 	workerService := NewWorkerService(sqsClient, taskRepo, notiService, hub)
@@ -84,23 +82,14 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	// 1. まずコンテキストをキャンセルして、すべてのループ（Hub, Worker, Watcher）に「止まれ」と伝える
+	// 【修正ポイント】アサーションの前に即座にキャンセルを呼ぶ
 	cancel()
-
-	// 2. ループが安全に「正常終了」するのを少し待つ
-	// これにより、通信中に接続が切れるのを防ぎます
-	time.Sleep(500 * time.Millisecond)
-
-	// 3. ループが止まったことを確認してから、Redisクライアントを閉じる
-	rdb.Close()
 
 	if !success {
 		t.Fatal("タイムアウト: 通知がDBに保存されませんでした")
 	}
 
-	t.Log("Integration test finished successfully")
-
-	// 4. 最後にほんの少しだけ待機（Goのテストランタイムが完全に静まるのを待つ）
-	time.Sleep(200 * time.Millisecond)
+	// ReceiveMessageのブロックが解けるのを待つためのわずかな猶予
+	time.Sleep(100 * time.Millisecond)
 
 }
