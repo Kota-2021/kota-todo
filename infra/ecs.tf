@@ -83,10 +83,8 @@ resource "aws_iam_policy" "ecs_secrets_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          # RDSパスワードシークレットのARNを指定
-          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password-*",
-          # JWTシークレットのARN
-          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret-*"
+          # 箇別に指定するのではなく、プロジェクト名の配下すべてを許可する
+          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"
         ]
       },
     ]
