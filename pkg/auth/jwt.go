@@ -17,22 +17,21 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func getJWTSecret() []byte {
+// getJWTSecret は環境変数からシークレットキーを取得します
+func getJWTSecret() ([]byte, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		// ローカル開発用にデフォルト値を残しても良いですが、
-		// 基本は ecs.tf の設定値が優先されます
-		return []byte("YOUR_SUPER_SECRET_KEY_MUST_BE_SECURELY_MANAGED")
+		// 2026年本番環境に向け、デフォルト値は廃止しエラーを返します。
+		// これにより、設定ミスによる脆弱な鍵の使用を防止します。
+		return nil, errors.New("JWT_SECRET environment variable is required")
 	}
-	return []byte(secret)
+	return []byte(secret), nil
 }
 
 // GenerateToken は指定されたユーザーIDのJWTを生成します
 func GenerateToken(userID uuid.UUID) (string, error) {
-	// 1. 有効期限を設定 (例: 7日間)
 	expirationTime := time.Now().Add(7 * 24 * time.Hour)
 
-	// 2. クレームを作成
 	claims := &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -41,12 +40,16 @@ func GenerateToken(userID uuid.UUID) (string, error) {
 		},
 	}
 
-	// 3. トークンを生成し、HS256で秘密鍵を使って署名
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString(getJWTSecret())
+	secret, err := getJWTSecret()
 	if err != nil {
-		return "", errors.New("JWT署名エラー")
+		return "", fmt.Errorf("auth.GenerateToken: %w", err)
+	}
+
+	tokenString, err := token.SignedString(secret)
+	if err != nil {
+		return "", fmt.Errorf("auth.GenerateToken (signing): %w", err)
 	}
 
 	return tokenString, nil
@@ -54,33 +57,28 @@ func GenerateToken(userID uuid.UUID) (string, error) {
 
 // ValidateToken はJWT文字列を受け取り、検証してUserIDを返します。
 func ValidateToken(tokenString string) (uuid.UUID, error) {
-	// トークンのパースと検証
+	secret, err := getJWTSecret()
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("auth.ValidateToken (config): %w", err)
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		// トークンの署名アルゴリズムが想定通りかチェック
+		// 署名アルゴリズムの検証
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Method)
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		// シークレットキーを返します
-		return getJWTSecret(), nil
+		return secret, nil
 	})
 
 	if err != nil {
-		// トークンの検証失敗 (署名無効、期限切れ、不正な形式など)
-		return uuid.Nil, fmt.Errorf("token validation failed: %w", err)
+		// 期限切れや署名不一致などの具体的な理由はここでラッピングされる
+		return uuid.Nil, fmt.Errorf("auth.ValidateToken: %w", err)
 	}
 
-	// 検証に成功した場合、クレームを取得
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		// クレームの型変換失敗、またはトークンが有効でない
-		return uuid.Nil, fmt.Errorf("invalid token claims or not valid")
+	// クレームの抽出
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		return claims.UserID, nil
 	}
 
-	// 期限切れチェック (ParseWithClaimsが通常処理しますが、念のため手動チェックも可能)
-	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(time.Now()) {
-		return uuid.Nil, fmt.Errorf("token expired")
-	}
-
-	// 成功: 抽出したUserIDを返却
-	return claims.UserID, nil // uuid.UUID型を返却
+	return uuid.Nil, errors.New("auth.ValidateToken: invalid token")
 }

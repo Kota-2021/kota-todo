@@ -229,13 +229,10 @@ resource "aws_ecs_task_definition" "main" {
           name  = "AWS_REGION"
           value = data.aws_region.current.name
         },
-        {
-          // valueは何でも良いが、推測されにくい文字列を使用すること。
-          name = "JWT_SECRET", value = "your-portfolio-secret-key-2025-aujg93jsfiu9je" 
-        }
-        # 注意: DB_PASSWORDは機密情報のため、本番環境では必ずSecrets Managerを使用すること
-        # 開発環境では環境変数として設定（セキュリティリスクがあるため本番では非推奨）
-        # 本番環境では以下のsecretsブロックを使用すること
+        // 本番環境ではproductionとすることで、ログがJSON形式で出力される。
+        // 開発環境ではdevelopmentとすることで、ログがテキスト形式で出力される。
+        { name = "APP_ENV", value = "production" },
+        { name = "MODE",    value = "api" }
       ]
 
       # シークレット（機密情報は環境変数ではなくシークレットとして管理することを推奨）
@@ -245,6 +242,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name      = "DB_PASSWORD"
           valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 
@@ -288,13 +289,17 @@ resource "aws_ecs_task_definition" "main" {
         { name = "REDIS_PORT", value = tostring(aws_elasticache_cluster.main.port) },
         { name = "SQS_QUEUE_URL", value = aws_sqs_queue.main.url },
         { name = "MODE", value = "worker" }, # Go側で「Workerとして動く」ことを判別させるための変数
-        { name = "JWT_SECRET", value = "your-portfolio-secret-key-2025-aujg93jsfiu9je" } # valueは何でも良いが、推測されにくい文字列を使用すること。
+        { name = "APP_ENV", value = "production" },
       ]
 
       secrets = [
         {
           name      = "DB_PASSWORD"
           valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 

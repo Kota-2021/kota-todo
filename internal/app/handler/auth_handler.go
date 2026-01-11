@@ -2,12 +2,16 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/service"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lib/pq" // PostgreSQL固有のエラーコードを処理するためにインポート
+	// PostgreSQL固有のエラーコードを処理するためにインポート
 )
 
 // AuthController は認証関連のエンドポイントを処理します
@@ -29,32 +33,46 @@ func NewAuthController(authService service.AuthService) *AuthController {
 	return &AuthController{AuthService: authService}
 }
 
+// handleError: エラーレスポンス形式の統一と抽象化（TaskHandlerと同様のロジック）
+func (c *AuthController) handleError(ctx *gin.Context, err error) {
+	var status int
+	var msg string
+
+	switch {
+	case errors.Is(err, apperr.ErrValidation):
+		status = http.StatusBadRequest
+		msg = err.Error() // バリデーション内容はユーザーに伝える
+	case errors.Is(err, apperr.ErrUnauthorized):
+		status = http.StatusUnauthorized
+		msg = "ユーザー名またはパスワードが正しくありません"
+	case errors.Is(err, apperr.ErrInternal):
+		status = http.StatusInternalServerError
+		msg = "サーバー内部エラーが発生しました"
+	default:
+		// 未定義のエラーは500として扱い、詳細はログにのみ記録
+		slog.Error("Auth error occurred", "error", err)
+		status = http.StatusInternalServerError
+		msg = "予期せぬエラーが発生しました"
+	}
+
+	ctx.JSON(status, gin.H{"error": msg})
+}
+
 // Signup はユーザー登録のエンドポイントを処理します
 func (c *AuthController) Signup(ctx *gin.Context) {
 	var req models.SignupRequest
 
-	// 1. リクエストのバインディングとバリデーション
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body or validation failed", "details": err.Error()})
+		c.handleError(ctx, fmt.Errorf("%w: %v", apperr.ErrValidation, err))
 		return
 	}
 
-	// 2. Service層の呼び出し
 	user, err := c.AuthService.Signup(&req)
 	if err != nil {
-		// ユーザー名重複エラーのハンドリング (PostgreSQL/pq のエラーコードを使用)
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == "unique_violation" {
-			ctx.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
-			return
-		}
-		// その他のエラー
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user", "details": err.Error()})
+		c.handleError(ctx, err)
 		return
 	}
 
-	// 3. 成功レスポンスの返却 (201 Created)
-	// セキュリティのため、パスワード情報を含まないレスポンスを返す
-	// models.User に `json:"-"` を付けていれば自動的に除外される
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
 		"user":    gin.H{"id": user.ID, "username": user.Username},
@@ -66,30 +84,17 @@ func (c *AuthController) Signin(ctx *gin.Context) {
 	var req models.SigninRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "リクエスト形式が不正です"})
+		c.handleError(ctx, fmt.Errorf("%w: invalid request format", apperr.ErrValidation))
 		return
 	}
 
-	// 1. Service層の呼び出し (戻り値にトークンが追加されている)
 	_, token, err := c.AuthService.AuthenticateUser(req.Username, req.Password)
-
 	if err != nil {
-		// 認証失敗時 (ユーザーNotFoundやパスワード不一致) のエラーハンドリング
-		if err.Error() == "認証情報が正しくありません" {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()}) // 401 Unauthorized
-			return
-		}
-		// その他のサービス層エラー (DB接続エラー、JWT生成エラーなど)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ログイン処理中にエラーが発生しました"})
+		c.handleError(ctx, err)
 		return
 	}
 
-	// 2. 成功レスポンス (200 OK) の返却
-	response := SigninResponse{
+	ctx.JSON(http.StatusOK, SigninResponse{
 		Token: token,
-		// User: &models.UserResponse{ID: user.ID, Username: user.Username}, // 必要であれば
-	}
-
-	// ログインはリソース作成ではないため、200 OKを使用するのが一般的です
-	ctx.JSON(http.StatusOK, response)
+	})
 }

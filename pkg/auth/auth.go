@@ -3,16 +3,17 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 // HashPassword は平文のパスワードを bcrypt でハッシュ化します
 func HashPassword(password string) (string, error) {
-	// bcrypt のコストパラメータを設定（通常は DefaultCost で十分）
+	// コストパラメータは DefaultCost (10) が一般的です
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("auth.HashPassword: %w", err)
 	}
 	return string(bytes), nil
 }
@@ -20,12 +21,14 @@ func HashPassword(password string) (string, error) {
 // CheckPasswordHash は平文のパスワードとハッシュを比較します
 // ログイン処理で利用します
 func CheckPasswordHash(password, hash string) (bool, error) {
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-		// パスワードが一致しない場合
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	if err != nil {
+		// パスワードの不一致は「エラー」ではなく「不一致（false）」という結果として返す
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			return false, errors.New("認証情報が正しくありません") // 認証失敗
+			return false, nil
 		}
-		return false, errors.New("パスワード照合中にエラーが発生しました")
+		// それ以外のエラー（ハッシュ形式が壊れている等）はエラーとして返す
+		return false, fmt.Errorf("auth.CheckPasswordHash: %w", err)
 	}
 
 	return true, nil

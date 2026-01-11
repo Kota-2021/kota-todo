@@ -2,6 +2,7 @@
 package router
 
 import (
+	"log/slog"
 	"my-portfolio-2025/internal/app/handler"
 	"my-portfolio-2025/internal/app/middleware"
 	"time"
@@ -18,7 +19,16 @@ func SetupRouter(
 	redisClient *redis.Client,
 ) *gin.Engine {
 
-	r := gin.Default()
+	// gin.Default() ではなく gin.New() を使用
+	r := gin.New()
+
+	// 1. パニックが起きてもサーバーを落とさないためのリカバリミドルウェア
+	r.Use(gin.Recovery())
+
+	// 2. 標準の Logger の代わりに、必要に応じて slog を使ったアクセスログを
+	// 出力するようにすると、本番環境での解析がさらに楽になります。
+	// ここではシンプルさを保つため標準の Logger を使用（または自作 slog ミドルウェア）
+	r.Use(gin.Logger())
 
 	// --- 認証不要な公開ルート /auth ---
 	public := r.Group("/auth")
@@ -26,9 +36,6 @@ func SetupRouter(
 		public.POST("/signup", authHandler.Signup) // ユーザー登録
 		public.POST("/signin", authHandler.Signin) // ログイン（JWT発行）
 	}
-
-	// authGroupへ移動させた。260108byKota
-	// r.GET("/ws", notificationHandler.HandleWS)
 
 	// --- 認証必須のルート共通設定 ---
 	authGroup := r.Group("/")
@@ -38,34 +45,24 @@ func SetupRouter(
 		// タスク関連
 		tasks := authGroup.Group("/tasks")
 		{
-			// 4.5 Create (POST /tasks)
 			tasks.POST("", taskHandler.CreateTask)
-			// 4.6 Read List (GET /tasks)
 			tasks.GET("", taskHandler.GetTasks)
-			// 4.7 Read Detail (GET /tasks/:id)
 			tasks.GET("/:id", taskHandler.GetTaskByID)
-			// 4.8 Update (PUT /tasks/:id)
 			tasks.PUT("/:id", taskHandler.UpdateTask)
-			// 4.9 Delete (DELETE /tasks/:id)
 			tasks.DELETE("/:id", taskHandler.DeleteTask)
 		}
 
 		// WebSocket エンドポイント
-		websocket := authGroup.Group("/ws")
-		{
-			websocket.GET("", notificationHandler.HandleWS)
-		}
+		authGroup.GET("/ws", notificationHandler.HandleWS)
 
 		// 通知関連
 		notifications := authGroup.Group("/notifications")
 		{
-			// 通知エンドポイント
-			// GET /notifications (ユーザーの通知を10件ずつ取得)
 			notifications.GET("", notificationHandler.GetNotifications)
-			// PATCH /notifications/:id/read (指定された通知を既読にします)
 			notifications.PATCH("/:id/read", notificationHandler.MarkAsRead)
 		}
 	}
 
+	slog.Info("Router setup completed") // 正常にルートが組まれた記録を残す
 	return r
 }

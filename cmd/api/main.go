@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,201 +23,178 @@ import (
 	"gorm.io/gorm"
 )
 
+// initLogger は環境に応じて slog を初期化します
+func initLogger() {
+	var handler slog.Handler
+	if os.Getenv("APP_ENV") == "production" {
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	}
+	slog.SetDefault(slog.New(handler))
+}
+
+// loadEnv は .env ファイルを読み込みます
+func loadEnv() {
+	if err := godotenv.Load(); err != nil {
+		slog.Info(".env file not found, using environment variables")
+	} else {
+		slog.Info(".env file loaded successfully")
+	}
+}
+
 // setupDatabase はDB接続の確立、テスト、マイグレーションを行います
 func setupDatabase() *gorm.DB {
+	slog.Info("Starting database connection...")
 
-	log.Println("=== データベース接続開始 ===")
-
-	// ローカルでの開発用.envファイルの読み込み
-	currentPath, errEnv := os.Getwd()
-	if errEnv != nil {
-		log.Fatal("Error getting current path")
-	}
-	envFilePath := currentPath + "/.env"
-
-	if _, err := os.Stat(envFilePath); err == nil {
-		errEnv := godotenv.Load(envFilePath)
-		if errEnv != nil {
-			log.Printf("Notice: .env file found at %s but could not be loaded: %v", envFilePath, errEnv)
-		} else {
-			log.Println("✓ .env file loaded successfully")
+	// 環境変数チェック
+	requiredEnvs := []string{"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE"}
+	for _, env := range requiredEnvs {
+		if os.Getenv(env) == "" {
+			slog.Error("Required environment variable is missing", "variable", env)
+			os.Exit(1)
 		}
-	} else {
-		log.Println("Notice: .env file not found, skipping. (This is normal in production)")
-	}
-	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
-
-	// 環境変数から接続情報を取得
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
-	dbSSLMode := os.Getenv("DB_SSLMODE")
-
-	if dbHost == "" || dbPort == "" || dbUser == "" || dbPassword == "" || dbName == "" || dbSSLMode == "" {
-		log.Fatalf("環境変数が設定されていません (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSLMODE)")
 	}
 
-	// URI形式の接続文字列を構築
-	// パスワードをURLエンコードすることで、特殊文字を含む場合でもGormで安全に扱える
-	encodedPassword := url.QueryEscape(dbPassword)
+	encodedPassword := url.QueryEscape(os.Getenv("DB_PASSWORD"))
 	dbURI := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s&TimeZone=Asia/Tokyo",
-		dbUser, encodedPassword, dbHost, dbPort, dbName, dbSSLMode,
+		os.Getenv("DB_USER"), encodedPassword, os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"), os.Getenv("DB_NAME"), os.Getenv("DB_SSLMODE"),
 	)
 
-	maxRetries := 30
-	retryInterval := 1 * time.Second
 	var db *gorm.DB
 	var err error
+	maxRetries := 30
 
-	// 接続テストと確立（リトライロジック）
-	for i := 0; i < maxRetries; i++ {
-		// Gormを使ってDB接続を試みる
+	for i := 1; i <= maxRetries; i++ {
+
 		db, err = gorm.Open(postgres.Open(dbURI), &gorm.Config{})
 		if err == nil {
-			// 接続に成功したら、Pingで生存確認
-			sqlDB, pingErr := db.DB()
-			if pingErr == nil {
-				pingErr = sqlDB.Ping()
+			if sqlDB, pingErr := db.DB(); pingErr == nil {
+				if pingErr = sqlDB.Ping(); pingErr == nil {
+					slog.Info("PostgreSQL connected successfully")
+					break
+				}
+				err = pingErr
 			}
-
-			if pingErr == nil {
-				log.Println("✓ PostgreSQLへの接続に成功しました！")
-				break
-			}
-			err = pingErr
 		}
 
-		if i < maxRetries-1 {
-			log.Printf("接続試行 %d/%d 失敗: %v (再試行します...)", i+1, maxRetries, err)
-			time.Sleep(retryInterval)
-		} else {
-			log.Fatalf("接続試行 %d/%d 失敗: %v", i+1, maxRetries, err)
+		if i == maxRetries {
+			slog.Error("Could not connect to database after maximum retries", "error", err)
+			os.Exit(1)
 		}
+
+		slog.Warn("Database connection failed, retrying...", "attempt", i, "max", maxRetries, "error", err)
+		time.Sleep(2 * time.Second)
 	}
 
-	// データベースマイグレーション
-	// データベースが存在しない場合は自動作成される。
-	err = db.AutoMigrate(&models.User{}, &models.Task{}, &models.Notification{})
-	if err != nil {
-		log.Fatalf("Failed to perform database migration: %v", err)
+	// マイグレーション
+	if err := db.AutoMigrate(&models.User{}, &models.Task{}, &models.Notification{}); err != nil {
+		slog.Error("Database migration failed", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Database migration completed.")
+	slog.Info("Database migration completed")
 
 	return db
 }
 
 func main() {
+	// 1. ログと環境変数の初期設定
+	initLogger()
+	loadEnv()
 
-	// 1. DB接続の確立とマイグレーション
-	db := setupDatabase()
-
-	// --- 基盤となる Context の生成 ---
+	// 2. 基盤 Context と DB 初期化
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// --- Redisクライアントの初期化 ---
-	rdb := redis.NewRedisClient()
+	db := setupDatabase()
 
-	// --- NotificationHub の初期化 (Redisクライアントを渡す) ---
-	hub := service.NewNotificationHub(rdb)
-
-	go hub.Run()               // Hubのイベントループを開始
-	go hub.SubscribeRedis(ctx) // Redisの購読ループをバックグラウンドで開始
-
-	// SQSクライアントの初期化
-	// ローカルでの開発用.envファイルの読み込み
-	currentPath, err := os.Getwd()
+	// 3. インフラ層の初期化
+	// Redis (Pingなし版を想定)
+	rdb, err := redis.NewRedisClient()
 	if err != nil {
-		log.Fatal("Error getting current path")
+		slog.Error("Failed to initialize Redis", "error", err)
+		// Redisが必須の構成（RateLimit等）であれば、ここで終了させる
+		os.Exit(1)
 	}
-	envFilePath := currentPath + "/.env"
-	if _, err := os.Stat(envFilePath); err == nil {
-		godotenv.Load(envFilePath)
-	}
-	// ここまでがローカルでの開発用.envファイルの読み込みの処理。
 
-	// --- SQS関連の環境変数チェック (共通) ---
-	region := os.Getenv("AWS_REGION")
-	queueURL := os.Getenv("SQS_QUEUE_URL")
+	// SQS
 	queueName := os.Getenv("SQS_QUEUE_NAME")
-	if region == "" || queueURL == "" {
-		log.Println("Warning: AWS_REGION or SQS_QUEUE_URL is not set. Worker may not function correctly.")
+	sqsClient, err := aws.NewSQSClient(ctx, queueName)
+	if err != nil {
+		slog.Error("SQS initialization failed", "error", err)
+		// 本番ワーカーモードなら Exit、APIモードなら続行などの判断が可能
 	}
 
-	// --- 依存性の注入（DI）と各層の初期化 ---
+	// 4. DI (依存性注入)
+	// Repositories
 	userRepo := repository.NewUserRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	notiRepo := repository.NewNotificationRepository(db)
 
-	authService := service.NewAuthService(userRepo)
-	authHandler := handler.NewAuthController(authService)
+	// Hub & Services
+	hub := service.NewNotificationHub(rdb)
+	go hub.Run()
+	go hub.SubscribeRedis(ctx)
 
+	authService := service.NewAuthService(userRepo)
 	notiService := service.NewNotificationService(notiRepo)
+
+	// WorkerService
+	workerService := service.NewWorkerService(sqsClient, taskRepo, notiService, hub)
+
+	// Task/Auth Handler dependencies
+	taskService := service.NewTaskService(taskRepo, workerService)
+
+	authHandler := handler.NewAuthController(authService)
+	taskHandler := handler.NewTaskHandler(taskService)
 	notificationHandler := handler.NewNotificationHandler(notiService, hub)
 
-	// --- 非同期ワーカーの依存性 ---
-	// SQSクライアントを初期化
-	sqsClient, err := aws.NewSQSClient(ctx, queueName)
-	if err != nil {
-		log.Printf("SQS初期化失敗: %v", err)
-		// 本番環境では Fatalf にする検討も必要ですが、まずは実行を優先
-	}
-
-	// WorkerService を初期化 (taskRepoを渡すことで、二重送信防止の更新を可能にする)
-	workerService := service.NewWorkerService(sqsClient, taskRepo, notiService, hub)
-	taskService := service.NewTaskService(taskRepo, workerService)
-	taskHandler := handler.NewTaskHandler(taskService)
-
-	// ==========================================
-	// ここから分岐処理
-	// ==========================================
+	// 5. 実行モードの判定
 	mode := os.Getenv("MODE")
 
 	if mode == "worker" {
-		// --- 【Workerモード】 ---
-		log.Println("🚾 Starting in WORKER mode...")
-
-		if sqsClient != nil {
-			// WatcherとWorkerをバックグラウンドではなく、メインスレッドを維持する形で実行
-			go workerService.StartTaskWatcher(ctx)
-
-			log.Println("✓ Worker service is polling SQS...")
-			// StartWorker は中で無限ループしている想定のため、ここでプロセスをブロックする
-			workerService.StartWorker(ctx)
-		} else {
-			log.Fatal("Worker mode failed: SQS client is nil")
+		slog.Info("Starting in WORKER mode")
+		if sqsClient == nil {
+			slog.Error("Worker mode requires a valid SQS client")
+			os.Exit(1)
 		}
 
-	} else {
-		// --- 【API/Defaultモード】 ---
-		log.Println("🅰️ Starting in API server mode...")
+		go workerService.StartTaskWatcher(ctx)
+		slog.Info("Worker service is polling SQS")
+		workerService.StartWorker(ctx) // 無限ループ
 
-		// ルーター設定
+	} else {
+		slog.Info("Starting in API server mode")
+
+		// Gin の動作モード設定
+		if os.Getenv("APP_ENV") == "production" {
+			gin.SetMode(gin.ReleaseMode)
+		}
+
 		r := router.SetupRouter(authHandler, taskHandler, notificationHandler, rdb)
 
-		// ヘルスチェック
+		// ヘルスチェック (slog を活用)
 		r.GET("/health", func(c *gin.Context) {
 			sqlDB, _ := db.DB()
-			if sqlDB.Ping() != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "db_connected": false})
+			if err := sqlDB.Ping(); err != nil {
+				slog.Error("Healthcheck failed: DB disconnected", "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"status": "error"})
 				return
 			}
-			c.JSON(http.StatusOK, gin.H{"status": "ok", "db_connected": true})
+			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
 
-		// サーバー起動
 		port := os.Getenv("PORT")
 		if port == "" {
 			port = "8080"
 		}
-		serverAddr := ":" + port
 
-		log.Printf("Starting API server on http://localhost%s", serverAddr)
-		if err := r.Run(serverAddr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server stopped unexpectedly: %v", err)
+		slog.Info("API server starting", "port", port, "env", os.Getenv("APP_ENV"))
+		if err := r.Run(":" + port); err != nil {
+			slog.Error("Server stopped unexpectedly", "error", err)
+			os.Exit(1)
 		}
 	}
 }

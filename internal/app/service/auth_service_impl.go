@@ -3,6 +3,8 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository"
 	"my-portfolio-2025/pkg/auth"
@@ -23,37 +25,33 @@ func NewAuthService(userRepo repository.UserRepository) AuthService {
 
 // Signup はユーザー登録のビジネスロジックを実行します
 func (s *AuthServiceImpl) Signup(req *models.SignupRequest) (*models.User, error) {
+	// 1. ユーザー名の重複チェック
+	_, err := s.userRepo.FindByUsername(req.Username)
+	if err == nil {
+		// エラーがない（＝ユーザーが見つかった）場合は重複エラーを返す
+		return nil, fmt.Errorf("%w: username '%s' is already taken", apperr.ErrValidation, req.Username)
+	}
 
-	// 1.ユーザー名の重複チェック
-	existingUser, _ := s.userRepo.FindByUsername(req.Username)
-
-	if existingUser != nil {
-		// ユーザーが存在する場合、重複エラーを返す
-		return nil, errors.New(req.Username + " is already taken") // 暫定的なエラー
-		// 実際には return nil, service.ErrUserAlreadyExists など具体的なエラーを定義して返す
+	// レコード不在以外のDBエラーが発生した場合はそのまま返す
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("authService.Signup.FindByUsername: %w", err)
 	}
 
 	// 2. パスワードのハッシュ化
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return nil, errors.New("failed to hash password")
+		return nil, fmt.Errorf("authService.Signup.HashPassword: %w", err)
 	}
 
-	// FindByUsername でレコード不在以外のDBエラーが発生した場合
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, err // DBエラーを返す
-	}
-
-	// 3. ユーザーモデルの作成とハッシュ化パスワードの設定
+	// 3. ユーザーモデルの作成
 	user := &models.User{
 		Username: req.Username,
-		Password: hashedPassword, // ハッシュ化されたパスワードを格納
+		Password: hashedPassword,
 	}
 
 	// 4. DBに保存
 	if err := s.userRepo.CreateUser(user); err != nil {
-		// ここでユーザー名重複エラーなどを適切に処理する（例: Gormのエラーコードで判断）
-		return nil, err // ひとまずエラーをそのまま返す
+		return nil, fmt.Errorf("authService.Signup.CreateUser: %w", err)
 	}
 
 	return user, nil
@@ -61,29 +59,35 @@ func (s *AuthServiceImpl) Signup(req *models.SignupRequest) (*models.User, error
 
 // AuthenticateUser はユーザー認証のビジネスロジックを実行します
 func (s *AuthServiceImpl) AuthenticateUser(username, password string) (*models.User, string, error) {
+
 	// 1. ユーザー名からユーザーを取得
 	user, err := s.userRepo.FindByUsername(username)
 	if err != nil {
-		// レコードが見つからないエラーの場合、認証失敗として扱う
+		// セキュリティ上、「ユーザーが存在しない」のか「パスワードが違う」のかを区別させないため
+		// どちらも ErrUnauthorized として扱う
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, "", errors.New("認証情報が正しくありません") // 認証失敗
+			return nil, "", fmt.Errorf("%w: invalid username or password", apperr.ErrUnauthorized)
 		}
-		return nil, "", err // その他のDBエラー
+		// その他のDBエラーはそのまま返す
+		return nil, "", fmt.Errorf("authService.AuthenticateUser.FindByUsername: %w", err)
 	}
 
-	// 2. パスワード照合 (ステップ2-3)
-	// CompareHashAndPassword(保存されているハッシュ, 平文のパスワード)
+	// 2. パスワード照合
 	if ok, err := auth.CheckPasswordHash(password, user.Password); !ok {
-		return nil, "", err // 認証失敗
+		// 照合失敗時も ErrUnauthorized を返す
+		if err != nil {
+			return nil, "", fmt.Errorf("%w: %v", apperr.ErrUnauthorized, err)
+		}
+		// その他のエラーはそのまま返す
+		return nil, "", fmt.Errorf("%w: invalid password", apperr.ErrUnauthorized)
 	}
 
-	// 3. JWT生成 (ステップ2-4)
-	token, err := auth.GenerateToken(user.ID) // auth.GenerateToken を呼び出し
+	// 3. JWT生成
+	token, err := auth.GenerateToken(user.ID)
+
 	if err != nil {
-		return nil, "", errors.New("failed to generate token")
+		return nil, "", fmt.Errorf("authService.AuthenticateUser.GenerateToken: %w", err)
 	}
 
-	// 成功したユーザー情報とトークンを返す
 	return user, token, nil
-
 }
