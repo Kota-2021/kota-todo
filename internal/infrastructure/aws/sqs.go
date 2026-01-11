@@ -29,6 +29,11 @@ func NewSQSClient(ctx context.Context, queueName string) (*SQSClient, error) {
 		return nil, fmt.Errorf("SQS_QUEUE_URL is not set in environment variables")
 	}
 
+	// リージョンが空の場合のガード
+	if region == "" {
+		region = "ap-northeast-1"
+	}
+
 	// SDK設定のオプション構築
 	opts := []func(*config.LoadOptions) error{
 		config.WithRegion(region),
@@ -53,11 +58,7 @@ func NewSQSClient(ctx context.Context, queueName string) (*SQSClient, error) {
 	})
 
 	// 構造化ログによる初期化完了の記録
-	slog.Info("SQS client initialized",
-		"queue_url", queueUrl,
-		"region", region,
-		"is_localstack", endpoint != "",
-	)
+	slog.Info("SQS client initialized", "url", queueUrl, "is_localstack", endpoint != "")
 
 	return &SQSClient{
 		Client:   client,

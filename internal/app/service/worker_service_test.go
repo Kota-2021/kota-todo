@@ -56,7 +56,7 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 		ID:             uuid.New(),
 		UserID:         userID,
 		Title:          "Integration Test Task",
-		DueDate:        time.Now().Add(30 * time.Minute), // 1時間以内
+		DueDate:        time.Now().Add(10 * time.Minute), // 1時間以内
 		Status:         models.TaskStatusPending,
 		LastNotifiedAt: nil, // 明示的にnilにする（GORMならデフォルトでnil）
 	}
@@ -73,16 +73,23 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	success := false
 
 	// 最大15秒間、1秒おきにDBを確認する(ポーリング)
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 20; i++ {
 		err := db.Where("user_id = ?", userID).First(&notification).Error
 		if err == nil {
 			success = true
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 	}
 
+	// 【修正ポイント】アサーションの前に即座にキャンセルを呼ぶ
+	cancel()
+
 	if !success {
-		t.Error("タイムアウト: 通知がDBに保存されませんでした")
+		t.Fatal("タイムアウト: 通知がDBに保存されませんでした")
 	}
+
+	// ReceiveMessageのブロックが解けるのを待つためのわずかな猶予
+	time.Sleep(100 * time.Millisecond)
+
 }

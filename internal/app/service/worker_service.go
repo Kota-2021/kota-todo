@@ -79,9 +79,20 @@ func (s *WorkerService) StartWorker(ctx context.Context) {
 			})
 
 			if err != nil {
+				// 【修正ポイント】ctx.Done()によるエラーなら、エラーログを出さずに終了する
+				if ctx.Err() != nil {
+					slog.Info("Worker loop stopped by context cancellation")
+					return
+				}
 				slog.Error("Failed to receive message from SQS", "error", err)
-				time.Sleep(5 * time.Second)
-				continue
+
+				// エラー時の待機中もキャンセルを検知できるようにする
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+					continue
+				}
 			}
 
 			for _, msg := range output.Messages {
