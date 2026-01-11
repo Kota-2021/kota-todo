@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // SetupTestDB はテスト用のDB接続を初期化し、テーブルをクリーンアップします
@@ -20,7 +21,9 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		dsn = "host=localhost user=portfolio_admin password=local_dev_password dbname=portfolio_db port=5432 sslmode=disable"
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		t.Fatalf("テストDBへの接続に失敗しました: %v", err)
 	}
