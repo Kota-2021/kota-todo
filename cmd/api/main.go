@@ -135,7 +135,7 @@ func main() {
 
 	// Hub & Services
 	hub := service.NewNotificationHub(rdb)
-	go hub.Run()
+	go hub.Run(context.Background())
 	go hub.SubscribeRedis(ctx)
 
 	authService := service.NewAuthService(userRepo)

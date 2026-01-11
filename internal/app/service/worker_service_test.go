@@ -41,11 +41,11 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	})
 	hub := NewNotificationHub(rdb)
 
-	// Hubを起動 (Redisとの通信待機状態にする)
-	go hub.Run()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Hubを起動 (Redisとの通信待機状態にする)
+	go hub.Run(ctx)
 
 	// WorkerService の作成
 	workerService := NewWorkerService(sqsClient, taskRepo, notiService, hub)

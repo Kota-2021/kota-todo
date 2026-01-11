@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"my-portfolio-2025/internal/app/models"
 	"sync"
 
@@ -53,22 +54,49 @@ func NewNotificationHub(redisClient *redis.Client) *NotificationHub {
 }
 
 // Run はハブのメインループを実行します（Goルーチンとして起動）
-func (h *NotificationHub) Run() {
+// Run はハブのメインループを実行します（Goルーチンとして起動）
+func (h *NotificationHub) Run(ctx context.Context) {
 	log.Println("Notification Hub is running...")
+
+	pubsub := h.redisClient.Subscribe(ctx, "notifications")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
 	for {
 		select {
-		// クライアントからの新規接続通知用チャネルを受け取った場合の処理
+		// 1. 終了信号の受信
+		case <-ctx.Done():
+			slog.Info("Notification Hub shutting down")
+			return
+
+		// 2. Redis（外部）からメッセージが届いた時
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+
+			// ここで解析（Unmarshal）を行う
+			var notif models.NotificationMessage
+			if err := json.Unmarshal([]byte(msg.Payload), &notif); err != nil {
+				slog.Error("Failed to unmarshal Redis message", "error", err)
+				continue
+			}
+
+			// 内部の配信用チャネル（Broadcast）へ転送する
+			// これにより、下の "case msg := <-h.Broadcast" が起動します
+			h.Broadcast <- &notif
+
+		// 3. クライアントの新規接続
 		case reg := <-h.Register:
 			h.mu.Lock()
-			// クライアントをマップに追加
 			h.clients[reg.UserID] = reg.Conn
 			h.mu.Unlock()
 			log.Printf("User %s connected via WebSocket", reg.UserID)
 
-		// クライアントの切断通知用チャネルを受け取った場合の処理
+		// 4. クライアントの切断
 		case userID := <-h.Unregister:
 			h.mu.Lock()
-			// クライアントをマップから削除
 			if conn, ok := h.clients[userID]; ok {
 				conn.Close()
 				delete(h.clients, userID)
@@ -76,16 +104,14 @@ func (h *NotificationHub) Run() {
 			}
 			h.mu.Unlock()
 
-		// 配信メッセージ用チャネルを受け取った場合の処理
+		// 5. クライアントへの実際の配信
 		case msg := <-h.Broadcast:
 			h.mu.Lock()
-			// クライアントにメッセージを送信
 			if conn, ok := h.clients[msg.UserID]; ok {
 				err := conn.WriteJSON(msg)
 				if err != nil {
 					log.Printf("Error sending message to user %s: %v", msg.UserID, err)
 					conn.Close()
-					// クライアントをマップから削除
 					delete(h.clients, msg.UserID)
 				}
 			}
