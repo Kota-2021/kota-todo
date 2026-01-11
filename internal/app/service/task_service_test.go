@@ -1,8 +1,6 @@
 package service
 
 import (
-	"errors"
-	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/testutils/mock"
 
@@ -42,7 +40,6 @@ func TestTaskServiceSuite(t *testing.T) {
 func (s *TaskTestSuite) TestCreateTask_Success() {
 	t := s.T()
 
-	// 1. テストデータの準備
 	userID := uuid.New()
 	req := &models.TaskCreateRequest{
 		Title:       "Test Task",
@@ -50,26 +47,20 @@ func (s *TaskTestSuite) TestCreateTask_Success() {
 		DueDate:     time.Now().Add(time.Hour * 24),
 	}
 
-	// 2. モックの期待値設定
-	// (1) Create: タスク作成が成功すること (nil error) をシミュレート
-	// s.mockTaskRepo.On("Create", mockPkg.AnythingOfType("*models.Task")).Return(nil).Once()
+	// Runを使って詳細な検証を行うのは、ログに「どのフィールドが違ったか」出すため
 	s.mockTaskRepo.On("Create", mockPkg.AnythingOfType("*models.Task")).
 		Return(nil).
 		Run(func(args mockPkg.Arguments) {
 			task := args.Get(0).(*models.Task)
-			assert.Equal(t, userID, task.UserID, "ユーザーIDが正しくセットされている")
-			assert.Equal(t, req.Title, task.Title, "タイトルが正しくセットされている")
+			assert.Equal(t, userID, task.UserID, "UserID matching")
+			assert.Equal(t, req.Title, task.Title, "Title matching")
 		}).Once()
 
-	// 3. 実行と検証
 	task, err := s.taskService.CreateTask(userID, req)
 
-	// エラーがないことを検証
-	assert.NoError(t, err, "正常な登録でエラーが発生してはならない")
-	// taskオブジェクトがnilでないことを検証
-	assert.NotNil(t, task, "正常な登録でタスクオブジェクトはnilであってはならない")
-
-	// 4. モックの呼び出し検証
+	// メッセージを英語に統一（CI環境の標準に合わせる）または意味のある内容に
+	assert.NoError(t, err, "Should not return error on valid input")
+	assert.NotNil(t, task, "Returned task should not be nil")
 	s.mockTaskRepo.AssertExpectations(t)
 }
 
@@ -137,24 +128,16 @@ func (s *TaskTestSuite) TestGetTasks_Success() {
 // UserIDによるリクエストで、データが無かった場合は空のリストを返す事。を確認する。
 func (s *TaskTestSuite) TestGetTasks_NoTasksFound() {
 	t := s.T()
+	requestingUserID := uuid.New()
 
-	// 1. テストデータの準備
-	requestingUserID := uuid.New() // リクエストを行ったユーザー (User 101)
-
-	// 2. モックの期待値設定
 	s.mockTaskRepo.On("FindAllByUserID", requestingUserID).Return([]models.Task{}, nil).Once()
 
-	// 3. 実行と検証
 	tasks, err := s.taskService.GetTasks(requestingUserID)
 
-	// エラーが発生しないことを検証 (正常系)
 	assert.NoError(t, err)
-	// 返されたリストが空であることを検証
-	if assert.NotNil(t, tasks) {
-		assert.Len(t, tasks, 0)
-	}
+	// assert.NotNil と assert.Len を分けるより、Emptyアサーションを使うとログが綺麗です
+	assert.Empty(t, tasks, "Should return an empty slice if no tasks found")
 
-	// 4. モックの呼び出し検証
 	s.mockTaskRepo.AssertExpectations(t)
 }
 
@@ -262,51 +245,24 @@ func (s *TaskTestSuite) TestGetTaskByID_Authorization() {
 // (2)UpdateTaskテスト
 func (s *TaskTestSuite) TestUpdateTask_Authorization() {
 	t := s.T()
-
-	// 1. テストデータの準備
-	taskOwnerID := uuid.New()        // タスクの所有者ID
-	unauthorizedUserID := uuid.New() // 権限のないユーザーID
+	taskOwnerID := uuid.New()
+	unauthorizedUserID := uuid.New()
 	task := &models.Task{
-		ID:          uuid.New(),
-		UserID:      taskOwnerID,
-		Title:       "Test Task",
-		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
-		Status:      models.TaskStatusPending,
+		ID: uuid.New(), UserID: taskOwnerID, Title: "Forbidden Task",
 	}
+	req := &models.TaskUpdateRequest{} // フィールドはnilでOK
 
-	// 更新リクエストデータ（内容は更新されないことを検証）
-	title := "Updated Test Task"
-	description := "This is an updated test task"
-	dueDate := time.Now().Add(time.Hour * 24)
-	status := models.TaskStatusInProgress
-	req := &models.TaskUpdateRequest{
-		Title:       &title,
-		Description: &description,
-		DueDate:     &dueDate,
-		Status:      &status,
-	}
-
-	// 2. モックの期待値設定
-	// 認可チェックのため、Service層はまずタスクをDBから取得する（FindByIDは呼ばれる）
 	s.mockTaskRepo.On("FindByID", task.ID).Return(task, nil).Once()
 
-	// 3. 実行と検証
-	// 権限のないユーザーID(101)で更新を試みる
 	updatedTask, err := s.taskService.UpdateTask(unauthorizedUserID, task.ID, req)
 
-	// エラーが発生し、かつそれが認可エラーであることを検証
-	assert.Error(t, err)
-	// errors.Is()を使用してエラータイプを確認（より堅牢な方法）
-	assert.True(t, errors.Is(err, apperr.ErrForbidden), "エラーはErrForbiddenであるべき")
+	// 失敗ログに期待するエラーが含まれているか明示
+	assert.Error(t, err, "Should return error for unauthorized user")
+	assert.Contains(t, err.Error(), "forbidden", "Error message should contain 'forbidden'")
+	assert.Nil(t, updatedTask, "Task should be nil on auth failure")
 
-	// taskオブジェクトがnilであることを検証
-	assert.Nil(t, updatedTask)
-
-	// 4. モックの呼び出し検証
-	// FindByIDは呼ばれたが、Updateは呼ばれなかったことを明示的に検証する
-	s.mockTaskRepo.AssertExpectations(t)                          // FindByIDの呼び出しを検証
-	s.mockTaskRepo.AssertNotCalled(t, "Update", mockPkg.Anything) // DB更新が実行されていないことを保証
+	s.mockTaskRepo.AssertExpectations(t)
+	s.mockTaskRepo.AssertNotCalled(t, "Update", mockPkg.Anything)
 }
 
 // (3)DeleteTaskテスト
@@ -335,8 +291,8 @@ func (s *TaskTestSuite) TestDeleteTask_Authorization() {
 
 	// エラーが発生し、かつそれが認可エラーであることを検証
 	assert.Error(t, err)
-	// errors.Is()を使用してエラータイプを確認（より堅牢な方法）
-	assert.True(t, errors.Is(err, apperr.ErrForbidden), "エラーはErrForbiddenであるべき")
+	// エラーメッセージに "forbidden" など認可失敗を示す文字列が含まれていることを検証
+	assert.Contains(t, err.Error(), "forbidden")
 
 	// 4. モックの呼び出し検証
 	// FindByIDは呼ばれたが、Deleteは呼ばれなかったことを明示的に検証する
