@@ -40,7 +40,6 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379", // init()で設定した環境変数を使ってもOK
 	})
-	defer rdb.Close()
 
 	hub := NewNotificationHub(rdb)
 
@@ -85,15 +84,23 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	// 【修正ポイント】アサーションの前に即座にキャンセルを呼ぶ
+	// 1. まずコンテキストをキャンセルして、すべてのループ（Hub, Worker, Watcher）に「止まれ」と伝える
 	cancel()
 
-	time.Sleep(1 * time.Second)
+	// 2. ループが安全に「正常終了」するのを少し待つ
+	// これにより、通信中に接続が切れるのを防ぎます
+	time.Sleep(500 * time.Millisecond)
+
+	// 3. ループが止まったことを確認してから、Redisクライアントを閉じる
+	rdb.Close()
 
 	if !success {
 		t.Fatal("タイムアウト: 通知がDBに保存されませんでした")
 	}
 
 	t.Log("Integration test finished successfully")
+
+	// 4. 最後にほんの少しだけ待機（Goのテストランタイムが完全に静まるのを待つ）
+	time.Sleep(200 * time.Millisecond)
 
 }
