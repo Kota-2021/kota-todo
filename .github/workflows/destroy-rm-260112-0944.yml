@@ -1,0 +1,62 @@
+name: 🚨 Manual Destroy-Remove Environment
+
+on:
+  workflow_dispatch: # ★手動でのみ実行可能にする★
+    inputs:
+      confirm:
+        description: 'Type "DESTROY-RM" to confirm the action. WARNING: This will delete all infrastructure except S3 backend.'
+        required: true
+        default: 'NO'
+
+jobs:
+  destroy-rm:
+    # ユーザーが "DESTROY-RM" と入力した場合のみ実行
+    if: github.event.inputs.confirm == 'DESTROY-RM'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    environment: production # 環境保護ルールが設定可能
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. AWS認証情報の取得 (OIDC認証)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActions-Terraform-Deployer
+          aws-region: ap-northeast-1
+
+      # 2. Terraform実行環境のセットアップ
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+          
+      # 3. Terraform Init の実行
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
+      
+      # 4. Terraform State Remove の実行
+      # このステップでは、Stateファイルから物理リソースを削除します。
+      # ※まず先に、lookstate.ymlを実行し、Stateリストを取得してください。そしてそのリストにある物理リソースに合うように、下記rmコマンドを修正してください。
+      - name: Terraform State Remove
+        run: |
+          echo "Starting state cleanup (removing all tracked resources from state file)..."
+
+          # 今回残ってしまった以下4つのリソースのみ削除する
+          terraform state rm data.aws_availability_zones.available
+          terraform state rm aws_security_group.ssm_bastion
+          terraform state rm aws_subnet.private_a
+          terraform state rm aws_vpc.main
+          
+          echo "State cleanup complete. State file is now empty (except for data sources)."
+        
+        working-directory: ./infra
