@@ -27,8 +27,10 @@ import (
 func initLogger() {
 	var handler slog.Handler
 	if os.Getenv("APP_ENV") == "production" {
+		// 本番環境ではJSON形式でログを出力
 		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	} else {
+		// 開発環境ではテキスト形式でログを出力
 		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
 	}
 	slog.SetDefault(slog.New(handler))
