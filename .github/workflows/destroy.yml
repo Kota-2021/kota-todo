@@ -45,18 +45,16 @@ jobs:
       with:
         terraform_version: 1.13.5
         
-    # 4. Stateファイルの強制クリーンアップ
-    - name: 🧹 Final State Cleanup and Verification
+    # 4. Terraform Destroy の実行
+    - name: 🧹 Execute Terraform Destroy
       run: |
-        # バックエンド設定の再適用（キャッシュをクリアするため）
-        terraform init -force-copy
+        # 初期化（キャッシュクリアが必要な場合は -reconfigure を使用）
+        terraform init -reconfigure
         
-        # AWSへの問い合わせをスキップしてStateファイルの内容をクリア
-        echo "Running destroy with -refresh=false to clear any lingering State entries..."
-        # 20251129byKota ※ここでは、app_image_uriを空にしています。これは、ECSタスク定義のイメージURIを空にするためです。
-        terraform destroy -auto-approve -refresh=false -var="app_image_uri="
-        
-        
+        echo "Running terraform destroy with refresh enabled..."
+        # 修正ポイント: -refresh=false を削除し、最新の状態を反映させます。
+        # また、変数のバリデーションエラーを防ぐためにダミー値を設定します。
+        terraform destroy -auto-approve -input=false -var="app_image_uri=dummy"
       working-directory: ./infra
       env:
         TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository" // Repository層をインポート
@@ -63,7 +64,13 @@ func (s *TaskServiceImpl) GetTaskByID(userID uuid.UUID, taskID uuid.UUID) (*mode
 
 	// 認可チェック: タスクの所有者か確認
 	if task.UserID != userID {
-		// 後のslog導入時にWarnログとして出力対象。ここではapperr.ErrForbiddenをラップ。
+		slog.Warn("Authorization violation attempt",
+			"userID", userID,
+			"taskID", taskID,
+			"resourceType", "task",
+			"action", "get",
+			"ownerID", task.UserID,
+		)
 		return nil, fmt.Errorf("%w: user %s has no permission for task %s", apperr.ErrForbidden, userID, taskID)
 	}
 
