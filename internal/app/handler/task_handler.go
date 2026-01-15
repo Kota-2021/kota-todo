@@ -59,7 +59,14 @@ func (h *TaskHandler) handleError(c *gin.Context, err error) {
 // ユーザーID取得ヘルパー関数 (重要！)
 // JWTミドルウェアで c.Set("userID", userID) された値を取得します。
 func getUserIDFromContext(c *gin.Context) uuid.UUID {
-	userID, ok := c.MustGet("userID").(uuid.UUID)
+	// MustGet はキーがないとパニックになるため、Get を使用する
+	val, exists := c.Get("userID")
+	if !exists {
+		return uuid.Nil
+	}
+
+	// 型アサーション
+	userID, ok := val.(uuid.UUID)
 	if !ok {
 		return uuid.Nil
 	}
@@ -152,7 +159,15 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 
 // DeleteTask: DELETE /tasks/:id (削除)
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
+
+	// デバッグログ：ここがターミナルに出れば、関数は呼ばれている
+	fmt.Println("DEBUG: DeleteTask started")
+
 	userID := getUserIDFromContext(c)
+	if userID == uuid.Nil {
+		h.handleError(c, apperr.ErrUnauthorized)
+		return
+	}
 	taskIDStr := c.Param("id")
 	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
@@ -166,4 +181,5 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+	c.Writer.WriteHeaderNow()
 }
