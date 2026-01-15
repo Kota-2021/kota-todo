@@ -136,7 +136,11 @@ func (s *TaskServiceImpl) CheckAndQueueDeadlines(ctx context.Context) error {
 	for _, task := range tasks {
 		// ジョブ投入時のエラーは全体を止めないようログ出力（後にslogへ）
 		if err := s.workerService.SendTaskNotification(ctx, task.ID, task.UserID, "期限が近づいています"); err != nil {
-			fmt.Printf("failed to queue notification for task %s: %v\n", task.ID, err)
+			slog.Error("failed to queue notification",
+				"taskID", task.ID,
+				"userID", task.UserID,
+				"error", err,
+			)
 		}
 	}
 	return nil

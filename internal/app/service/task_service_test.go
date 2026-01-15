@@ -1,6 +1,7 @@
 package service
 
 import (
+	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/testutils/mock"
 
@@ -62,6 +63,19 @@ func (s *TaskTestSuite) TestCreateTask_Success() {
 	assert.NoError(t, err, "Should not return error on valid input")
 	assert.NotNil(t, task, "Returned task should not be nil")
 	s.mockTaskRepo.AssertExpectations(t)
+}
+
+// (1)-2 空のタイトルでエラーを返すことを確認
+func (s *TaskTestSuite) TestCreateTask_EmptyTitle() {
+	t := s.T()
+	req := &models.TaskCreateRequest{Title: ""} // 空のタイトル
+
+	task, err := s.taskService.CreateTask(uuid.New(), req)
+
+	assert.ErrorIs(t, err, apperr.ErrValidation)
+	assert.Nil(t, task)
+	// Repository は呼ばれないはず
+	s.mockTaskRepo.AssertNotCalled(t, "Create", mockPkg.Anything)
 }
 
 // (2)GetTaskByIDテスト
