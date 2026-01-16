@@ -43,6 +43,7 @@ jobs:
         working-directory: ./infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }} # RDSパスワードはInit時にも必要
+          TF_VAR_acm_certificate_arn: ${{ secrets.ACM_CERTIFICATE_ARN }}
       
       # 4. Terraform State Remove の実行
       # このステップでは、Stateファイルから物理リソースを削除します。
@@ -52,6 +53,13 @@ jobs:
           echo "Starting state cleanup (removing all tracked resources from state file)..."
           
           # 物理リソースの State をすべて削除します
+
+          # Route 53 レコード
+          terraform state rm aws_route53_record.root
+          
+          # ALB HTTPS リスナー
+          terraform state rm aws_lb_listener.https
+
           # aws_cloudwatch_log_group.ecs
           terraform state rm aws_cloudwatch_log_group.ecs
           
@@ -118,3 +126,6 @@ jobs:
           echo "State cleanup complete. State file is now empty (except for data sources)."
         
         working-directory: ./infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
+          TF_VAR_acm_certificate_arn: ${{ secrets.ACM_CERTIFICATE_ARN }}

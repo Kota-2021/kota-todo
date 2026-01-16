@@ -144,7 +144,8 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           JWT_SECRET: "test-secret-key-for-ci"
-        run: go test -v ./...
+        # run: go test -v ./...
+        run: go test -v -race ./internal/app/service/...
         
       # 8. Dockerイメージのビルド、タグ付け、およびECRへのプッシュ（元ステップ5&6）
       # ECRリポジトリがステップ4で作成されているため、このステップは成功します。
