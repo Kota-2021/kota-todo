@@ -44,7 +44,7 @@ func TestAuthServiceSuite(t *testing.T) {
 // テストケース: ユーザー名が重複せず、パスワードがハッシュ化されてリポジトリに渡されることを確認
 func (s *AuthTestSuite) TestSignup_Success() {
 	t := s.T()
-	username := "newuser"
+	username := "unique-user-for-signup-test"
 	password := "strongpass123"
 
 	// --- 1. テストデータの準備 (SignupRequest構造体を作成) ---
