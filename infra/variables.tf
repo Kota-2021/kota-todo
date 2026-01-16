@@ -53,3 +53,9 @@ variable "worker_image_uri" {
   type        = string
   default     = ""
 }
+
+// ACM証明書のARN GitHub Actionsから渡す
+variable "acm_certificate_arn" {
+  description = "The ARN of the ACM certificate"
+  type        = string
+}

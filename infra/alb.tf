@@ -75,39 +75,36 @@ resource "aws_lb_target_group" "main" {
 # ----------------------------------------------------
 # 3. ALBリスナー: HTTP (ポート80) - WebSocket対応
 # ----------------------------------------------------
+# HTTPリスナー (80) -> HTTPS (443) へリダイレクト
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
-  # デフォルトアクション: ターゲットグループへの転送
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
-
-  # WebSocket対応: ALBはHTTPからWebSocketへのプロトコルアップグレードを自動処理
-  # 特別な設定は不要（ALBが自動的にUpgradeヘッダーを処理）
 }
 
 # ----------------------------------------------------
 # 4. ALBリスナー: HTTPS (ポート443) - WebSocket対応（オプション）
 # ----------------------------------------------------
-# 本番環境ではHTTPSリスナーを追加することを推奨
-# 証明書（ACM）が必要
-# resource "aws_lb_listener" "https" {
-#   load_balancer_arn = aws_lb.main.arn
-#   port              = "443"
-#   protocol          = "HTTPS"
-#   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-#   certificate_arn   = aws_acm_certificate.main.arn # ACM証明書のARN
-#
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.main.arn
-#   }
-# }
+# HTTPSリスナー (443)
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  # ACM証明書のARNを変数から取得
+  certificate_arn = var.acm_certificate_arn
 
-
-
-
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+}
