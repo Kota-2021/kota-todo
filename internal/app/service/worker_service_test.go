@@ -42,6 +42,7 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// 最後に必ずキャンセルを呼び、wg.Wait() で全ての終了を待つ
 	var wg sync.WaitGroup
 	defer func() {
