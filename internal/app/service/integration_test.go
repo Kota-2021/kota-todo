@@ -22,7 +22,8 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		// Logger: logger.Default.LogMode(logger.Silent),
+		Logger: logger.Discard,
 	})
 	if err != nil {
 		t.Fatalf("テストDBへの接続に失敗しました: %v", err)
@@ -52,4 +53,12 @@ func SetupTestSQS(t *testing.T) *aws.SQSClient {
 	}
 
 	return client
+}
+
+func TestMain(m *testing.M) {
+	// テスト実行前のセットアップが必要ならここに書く
+	code := m.Run() // ここで全テストが実行される
+
+	// 全テスト終了後に強制的に終了ステータスを返す
+	os.Exit(code)
 }
