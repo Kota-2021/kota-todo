@@ -45,11 +45,6 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	defer cancel()
 	// 最後に必ずキャンセルを呼び、wg.Wait() で全ての終了を待つ
 	var wg sync.WaitGroup
-	defer func() {
-		cancel()
-		wg.Wait()
-		t.Log("All background workers stopped safely.")
-	}()
 
 	hub := NewNotificationHub(rdb)
 
@@ -105,8 +100,13 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	}
 
 	if !success {
+		cancel() // 失敗時も止める
+		wg.Wait()
 		t.Fatal("タイムアウト: 通知がDBに保存されませんでした")
 	}
 
-	cancel()
+	// ★ テストの最後 ★
+	cancel()  // 1. 停止信号を送る
+	wg.Wait() // 2. すべてのゴルーチンが止まるのを「確実に」待つ
+	t.Log("All background workers stopped safely.")
 }
