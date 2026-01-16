@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,13 +42,22 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// 最後に必ずキャンセルを呼び、wg.Wait() で全ての終了を待つ
+	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+		t.Log("All background workers stopped safely.")
+	}()
 
 	hub := NewNotificationHub(rdb)
-	go hub.Run(ctx)
 
-	// Hubを起動 (Redisとの通信待機状態にする)
-	// go hub.Run(context.Background())
+	// 各ゴルーチンの開始時に wg.Add(1) し、終了時に wg.Done() する
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		hub.Run(ctx)
+	}()
 
 	// WorkerService の作成
 	workerService := NewWorkerService(sqsClient, taskRepo, notiService, hub)
@@ -65,8 +75,17 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 	db.Create(&testTask)
 
 	// WorkerとWatcherをバックグラウンドで開始
-	go workerService.StartWorker(ctx)
-	go workerService.StartTaskWatcher(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		workerService.StartWorker(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		workerService.StartTaskWatcher(ctx)
+	}()
 
 	// アサーション (非同期処理を待機しながらDBを確認)
 	t.Log("Waiting for notification to be processed...")
@@ -84,14 +103,9 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	// 【修正ポイント】アサーションの前に即座にキャンセルを呼ぶ
-	cancel()
-
 	if !success {
 		t.Fatal("タイムアウト: 通知がDBに保存されませんでした")
 	}
 
-	// ReceiveMessageのブロックが解けるのを待つためのわずかな猶予
-	time.Sleep(1000 * time.Millisecond)
-
+	cancel()
 }
