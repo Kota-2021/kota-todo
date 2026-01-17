@@ -100,3 +100,12 @@ Go 言語で開発した、業務向けリアルタイム通知・タスク管�
 - 「動くコード」だけでなく、「運用されるコード」を意識
     
 - 週2・リモート業務委託での即戦力を想
+
+---
+
+## ポートフォリオ詳細資料
+
+設計背景・構成図・技術選定理由・トレードオフについては  
+以下の資料に詳しくまとめています。
+
+- [https://github.com/Kota-2021/kota-todo/blob/main/docs/portfolio-README.md](https://github.com/Kota-2021/kota-todo/blob/main/docs/portfolio-README.md?utm_source=chatgpt.com)
