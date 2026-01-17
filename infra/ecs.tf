@@ -84,7 +84,7 @@ resource "aws_iam_policy" "ecs_secrets_policy" {
         ]
         Resource = [
           # 箇別に指定するのではなく、プロジェクト名の配下すべてを許可する
-          "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"
+          "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"
         ]
       },
     ]
@@ -232,7 +232,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "AWS_REGION"
-          value = data.aws_region.current.name
+          value = data.aws_region.current.id
         },
         // 本番環境ではproductionとすることで、ログがJSON形式で出力される。
         // 開発環境ではdevelopmentとすることで、ログがテキスト形式で出力される。
@@ -247,12 +247,12 @@ resource "aws_ecs_task_definition" "main" {
         {
           name      = "DB_PASSWORD"
           valueFrom = "${data.aws_secretsmanager_secret.db_password.arn}:password::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
         },
         {
           name      = "JWT_SECRET"
           valueFrom = "${data.aws_secretsmanager_secret.jwt_secret.arn}:jwt_key::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
+          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 
@@ -261,7 +261,7 @@ resource "aws_ecs_task_definition" "main" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-region"        = data.aws_region.current.id
           "awslogs-stream-prefix" = "ecs"
         }
       }
@@ -303,12 +303,12 @@ resource "aws_ecs_task_definition" "main" {
         {
           name      = "DB_PASSWORD"
           valueFrom = "${data.aws_secretsmanager_secret.db_password.arn}:password::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
+          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
         },
         {
           name      = "JWT_SECRET"
           valueFrom = "${data.aws_secretsmanager_secret.jwt_secret.arn}:jwt_key::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
+          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 
@@ -316,7 +316,7 @@ resource "aws_ecs_task_definition" "main" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-region"        = data.aws_region.current.id
           "awslogs-stream-prefix" = "worker"
         }
       }

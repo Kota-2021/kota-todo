@@ -114,6 +114,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.4'
+          # 260117byKotaキャッシュを有効にする。うまく動作しない場合キャッシュの無効化を試す事。
+          cache: true
         
       # --- テスト実行前に LocalStack 内にキューを作成する ---
       - name: Create SQS Queue in LocalStack
@@ -144,8 +146,8 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           JWT_SECRET: "test-secret-key-for-ci"
-        # run: go test -v ./...
-        run: go test -v -p 1 ./internal/app/service/... -args -test.v
+        # 全パッケージを対象にしつつ、DB競合を避ける設定
+        run: go test -v -p 1 ./...
         
       # 8. Dockerイメージのビルド、タグ付け、およびECRへのプッシュ（元ステップ5&6）
       # ECRリポジトリがステップ4で作成されているため、このステップは成功します。
