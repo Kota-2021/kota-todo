@@ -2,26 +2,29 @@ name: ▶️ CI/CD Pipeline
 
 on:
   ## 本番環境ではpushの3行を使用する
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
   ## 開発のみでは以下のworkflow_dispatchの6行を使用する
-  workflow_dispatch:
-    inputs:
-      confirm:
-        description: 'Type "DEPLOY" to confirm the action.'
-        required: true
-        default: 'NO'
+  # workflow_dispatch:
+  #   inputs:
+  #     confirm:
+  #       description: 'Type "DEPLOY" to confirm the action.'
+  #       required: true
+  #       default: 'NO'
 
 jobs:
   deploy:
-    ## 本番環境ではifの行は削除する事。onのpushの3行を使用し、自動実行を有効にする。
+  
+    # 開発段階ではifの行はコメントアウトする。
     # ユーザーが "DEPLOY" と入力した場合のみ実行
-    if: github.event.inputs.confirm == 'DEPLOY'
+    # if: github.event.inputs.confirm == 'DEPLOY'
+
     runs-on: ubuntu-latest
     
     # --- [テスト用]の DB と Redis を GitHub Actions 上に起動 ---
     services:
+      # DBサービスの定義
       postgres:
         image: postgres:17.6
         env:
@@ -35,6 +38,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Redisサービスの定義
       redis:
         image: redis:7
         ports:
@@ -55,6 +59,7 @@ jobs:
           DEBUG: 1
     # --- [テスト用]ここまで ---
 
+    ## 以下のpermissionsは、GitHub ActionsのOIDC認証を使用するために必要
     permissions:
       id-token: write
       contents: read
@@ -70,17 +75,13 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActions-Terraform-Deployer
           aws-region: ap-northeast-1
 
-      # ----------------------------------------------------
-      # 【修正箇所 1】コアインフラ構築をDocker操作の前に実行
-      # ----------------------------------------------------
-
-      # 2. Terraform実行環境のセットアップ (元のステップ7を移動)
+      # 2. Terraform実行環境のセットアップ
       - name: Setup Terraform (Core Infra)
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.5
 
-      # 3. Terraform Init の実行 (元のステップ8を移動)
+      # 3. Terraform Init の実行
       - name: Terraform Init (Core Infra)
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
@@ -88,9 +89,7 @@ jobs:
         run: terraform init
         working-directory: ./infra
       
-      # 4. Terraform Apply (コアインフラ構築: ECR, SQSなど) の実行 (新規追加)
-      # Docker Pushに必要なECRリポジトリと、W4-D16のタスクに必要なSQSキューを先に作成します。
-      # -target は、既に存在しているリソースのエラー（前回発生したTarget Groupなどのエラー）を一時的に回避するためにも有効です。
+      # 4. Terraform Apply (コアインフラ構築: ECR, SQSなど) の実行
       - name: Terraform Apply (Core Infra ECR, SQS)
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
@@ -99,10 +98,6 @@ jobs:
           echo "Applying core infrastructure: ECR and SQS..."
           terraform apply -auto-approve -input=false
         working-directory: ./infra
-      
-      # ----------------------------------------------------
-      # 【修正箇所 2】アプリケーションのビルド・デプロイ (ECRが存在するため成功する)
-      # ----------------------------------------------------
       
       # 5. ECRへのログイン（元ステップ2）
       - name: Login to Amazon ECR
@@ -146,11 +141,10 @@ jobs:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           JWT_SECRET: "test-secret-key-for-ci"
-        # 全パッケージを対象にしつつ、DB競合を避ける設定
+        # 全てのテストを、ひとつづつ実行。並列実行するとDB競合が発生する。
         run: go test -v -p 1 ./...
         
-      # 8. Dockerイメージのビルド、タグ付け、およびECRへのプッシュ（元ステップ5&6）
-      # ECRリポジトリがステップ4で作成されているため、このステップは成功します。
+      # 8. Dockerイメージのビルド、タグ付け、およびECRへのプッシュ
       - name: Build, tag, and push docker image to Amazon ECR
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -162,12 +156,8 @@ jobs:
         
           echo "Pushing image to ECR..."
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-          
-      # ----------------------------------------------------
-      # 【修正箇所 3】ECSサービス更新 (Terraform Plan & Apply)
-      # ----------------------------------------------------
 
-      # 9. Terraform Plan の実行 (ECSタスク定義のイメージURIを更新) (元ステップ9)
+      # 9. Terraform Plan の実行 (ECSタスク定義のイメージURIを更新)
       - name: Terraform Plan (Service Update)
         id: plan
         env:
@@ -186,7 +176,7 @@ jobs:
             -out=tfplan
         working-directory: ./infra
 
-      # 10. Terraform Apply の実行 (ECSサービスの更新) (元ステップ10)
+      # 10. Terraform Apply の実行 (ECSサービスの更新)
       - name: Terraform Apply (Service Update)
         env:
           TF_VAR_db_password: ${{ secrets.DB_MASTER_PASSWORD }}
