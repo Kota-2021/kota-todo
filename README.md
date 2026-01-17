@@ -26,4 +26,4 @@
 
 プロジェクトの詳細については、以下の資料をご覧ください。
 
-* [ポートフォリオ詳細](https://www.google.com/search?q=./docs/portfolio-README.md)
+* [ポートフォリオ詳細](https://github.com/Kota-2021/kota-todo/blob/main/docs/portfolio-README.md)
