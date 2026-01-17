@@ -23,6 +23,7 @@ resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster"
 
   # Container Insights を有効化（メトリクスとログの可視化）
+  # 本番環境では必要に応じて有効化する。
   setting {
     name  = "containerInsights"
     value = "enabled"
@@ -37,12 +38,13 @@ resource "aws_ecs_cluster" "main" {
 # ----------------------------------------------------
 # 3. IAMロール: ECSタスク実行ロール (ECSエージェントが使用)
 # ----------------------------------------------------
-# ECSエージェントがECRからイメージをプルし、CloudWatch Logsにログを送信するためのロール
+# 初期設定作業を行う為の準備用のロール
 # 以下のURLを参照
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role
 resource "aws_iam_role" "ecs_task_execution" {
   name = "${var.project_name}-ecs-task-execution-role"
 
+  // ECSとしての振る舞いを許可
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -61,8 +63,9 @@ resource "aws_iam_role" "ecs_task_execution" {
   }
 }
 
-# ECRからイメージをプルする権限
+# ECR と CloudWatch Logs に関する権限を付与
 # 以下のURLを参照
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_ecr" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
@@ -73,6 +76,7 @@ resource "aws_iam_policy" "ecs_secrets_policy" {
   name        = "${var.project_name}-ecs-secrets-policy"
   description = "Allows ECS Task Execution Role to retrieve DB password from Secrets Manager."
   
+  # Secrets Manager に対するアクセス権限を付与
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -83,7 +87,7 @@ resource "aws_iam_policy" "ecs_secrets_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          # 箇別に指定するのではなく、プロジェクト名の配下すべてを許可する
+          # プロジェクト関連のシークレットをすべて取得可能
           "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/*"
         ]
       },
@@ -91,6 +95,7 @@ resource "aws_iam_policy" "ecs_secrets_policy" {
   })
 }
 
+# Secrets Manager に対するアクセス権限を付与
 resource "aws_iam_role_policy_attachment" "ecs_secrets_attachment" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = aws_iam_policy.ecs_secrets_policy.arn
@@ -106,6 +111,7 @@ resource "aws_iam_role_policy_attachment" "ecs_secrets_attachment" {
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task-role"
 
+  // ECSとしての振る舞いを許可
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -124,13 +130,12 @@ resource "aws_iam_role" "ecs_task" {
   }
 }
 
-# SQSへのアクセス権限（必要に応じて追加）
-# 以下のURLを参照
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy
+# SQSへのアクセス権限を付与
 resource "aws_iam_role_policy" "ecs_task_sqs" {
   name = "${var.project_name}-ecs-task-sqs-policy"
   role = aws_iam_role.ecs_task.id
 
+  # SQSへのアクセス権限を付与
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -177,13 +182,14 @@ resource "aws_ecs_task_definition" "main" {
   cpu                      = var.ecs_task_cpu
   memory                   = var.ecs_task_memory
   
-  # タスク実行ロール（ECR、CloudWatch Logsへのアクセス用）
+  # タスク実行ロール（準備用の権限を付与。インフラの仕事）
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
-  # タスクロール（アプリケーションがAWSサービスにアクセスする用）
+  # タスクロール（稼働後のサービスに対する権限を付与。アプリの仕事）
   task_role_arn = aws_iam_role.ecs_task.arn
 
   # コンテナ定義
   container_definitions = jsonencode([
+    ### --- APIコンテナ (api) --- ###
     {
       name  = "${var.project_name}-api"
       image     = var.app_image_uri,
@@ -234,25 +240,22 @@ resource "aws_ecs_task_definition" "main" {
           name  = "AWS_REGION"
           value = data.aws_region.current.id
         },
-        // 本番環境ではproductionとすることで、ログがJSON形式で出力される。
-        // 開発環境ではdevelopmentとすることで、ログがテキスト形式で出力される。
+        # 本番環境ではproductionとすることで、ログがJSON形式で出力される。
+        # 開発環境ではdevelopmentとすることで、ログがテキスト形式で出力される。
         { name = "APP_ENV", value = "production" },
         { name = "MODE",    value = "api" }
       ]
 
-      # シークレット（機密情報は環境変数ではなくシークレットとして管理することを推奨）
-      # 本番環境ではSecrets ManagerやParameter Storeを使用することを推奨
+      # AWS Secrets Manager から値を取得する。
       # 開発環境では上記の環境変数として設定（セキュリティリスクがあるため本番では非推奨）
       secrets = [
         {
           name      = "DB_PASSWORD"
           valueFrom = "${data.aws_secretsmanager_secret.db_password.arn}:password::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/db-password:password::"
         },
         {
           name      = "JWT_SECRET"
           valueFrom = "${data.aws_secretsmanager_secret.jwt_secret.arn}:jwt_key::"
-          # valueFrom = "arn:aws:secretsmanager:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/jwt-secret:jwt_key::"
         }
       ]
 
@@ -278,7 +281,7 @@ resource "aws_ecs_task_definition" "main" {
       # 必須設定
       essential = true
     },
-    # --- 【新規追加】Workerコンテナ (worker) ---
+    ### --- Workerコンテナ (worker) --- ###
     {
       name  = "${var.project_name}-worker" # ここが GitHub Actions で指定するコンテナ名になります
       image = var.app_image_uri           # APIと同じイメージを使用
@@ -357,27 +360,22 @@ resource "aws_ecs_service" "main" {
   # ロードバランサー設定
   load_balancer {
     target_group_arn = aws_lb_target_group.main.arn
-    container_name   = "${var.project_name}-api"
+    container_name   = "${var.project_name}-api" # apiコンテナと通信をする
     container_port   = 8080
   }
 
   # デプロイメント設定（ローリングデプロイメント）
-  # maximum_percent: 最大200%までスケールアップ可能
-  # minimum_healthy_percent: 最小100%を維持（ゼロダウンタイムデプロイ）
-  # デフォルト値を使用（maximum_percent=200, minimum_healthy_percent=100）
+  deployment_maximum_percent = 200 # 最大200%までスケールアップ可能
+  deployment_minimum_healthy_percent = 100 # 最小100%を維持（ゼロダウンタイムデプロイ）
 
   # ヘルスチェック設定（ECSサービスレベル）
   health_check_grace_period_seconds = 60 # ヘルスチェック開始までの猶予期間（秒）
 
   # デプロイメントサーキットブレーカー（別ブロック）
   deployment_circuit_breaker {
-    enable   = true  # デプロイメントサーキットブレーカーを有効化
+    enable   = true  # デプロイメントサーキットブレーカーを有効化（「失敗し続けるデプロイ」を検知して止める。）
     rollback = true  # 失敗時に自動ロールバック
   }
-
-  # タスク定義の変更を検知して自動更新
-  # 新しいタスク定義が作成された場合、サービスを手動で更新する必要がある
-  # または、CI/CDパイプラインで自動更新
 
   tags = {
     Name = "${var.project_name}-service"
