@@ -8,6 +8,7 @@ import (
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository"
 	"my-portfolio-2025/internal/infrastructure/aws"
+	"my-portfolio-2025/pkg/utils"
 	"time"
 
 	awsgo "github.com/aws/aws-sdk-go-v2/aws"
@@ -52,7 +53,7 @@ func (s *WorkerService) SendTaskNotification(ctx context.Context, taskID uuid.UU
 	}
 
 	// 2. 送信成功後、DBの通知時刻を更新
-	if err := s.taskRepo.UpdateLastNotifiedAt(ctx, taskID, time.Now()); err != nil {
+	if err := s.taskRepo.UpdateLastNotifiedAt(ctx, taskID, utils.NowJST()); err != nil {
 		// SQSには送信済みのため、エラーを返さずログに留める（構造化ログの活用）
 		slog.Error("Failed to update last_notified_at in DB",
 			"taskID", taskID,
@@ -110,7 +111,7 @@ func (s *WorkerService) StartWorker(ctx context.Context) {
 					Message:   notifyData.Message,
 					Type:      "task_deadline",
 					IsRead:    false,
-					CreatedAt: time.Now(),
+					CreatedAt: utils.NowJST(),
 				}
 
 				// DBに保存
@@ -145,7 +146,7 @@ func (s *WorkerService) StartTaskWatcher(ctx context.Context) {
 
 	// 共通の処理ロジック
 	runWatcher := func() {
-		threshold := time.Now().Add(1 * time.Hour)
+		threshold := utils.NowJST().Add(1 * time.Hour)
 		tasks, err := s.taskRepo.FindUpcomingTasks(ctx, threshold)
 		if err != nil {
 			slog.Error("Error finding upcoming tasks", "error", err)
@@ -154,7 +155,7 @@ func (s *WorkerService) StartTaskWatcher(ctx context.Context) {
 
 		for _, task := range tasks {
 			message := fmt.Sprintf("タスク「%s」の期限が近づいています（期限: %s）",
-				task.Title, task.DueDate.Format("15:04"))
+				task.Title, task.DueDate.In(utils.JST).Format("15:04"))
 
 			if err := s.SendTaskNotification(ctx, task.ID, task.UserID, message); err != nil {
 				slog.Error("Failed to send notification", "taskID", task.ID, "error", err)

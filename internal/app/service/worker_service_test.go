@@ -10,6 +10,7 @@ import (
 
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository"
+	"my-portfolio-2025/pkg/utils"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -64,7 +65,7 @@ func TestIntegration_NotificationFlow(t *testing.T) {
 		ID:             uuid.New(),
 		UserID:         userID,
 		Title:          "Integration Test Task",
-		DueDate:        time.Now().Add(10 * time.Minute), // 1時間以内
+		DueDate:        utils.NowJST().Add(10 * time.Minute), // 1時間以内
 		Status:         models.TaskStatusPending,
 		LastNotifiedAt: nil, // 明示的にnilにする（GORMならデフォルトでnil）
 	}

@@ -3,6 +3,7 @@ package testutils
 
 import (
 	"my-portfolio-2025/internal/app/models"
+	"my-portfolio-2025/pkg/utils"
 	"time"
 
 	// JWTやハッシュ化に使用するライブラリをインポート
@@ -36,8 +37,8 @@ func CreateTestUser(id uuid.UUID, username string, hashedPassword string) *model
 		ID:        id,
 		Username:  username,
 		Password:  hashedPassword, // ハッシュ済みのパスワードを設定
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: utils.NowJST(),
+		UpdatedAt: utils.NowJST(),
 	}
 }
 
@@ -54,14 +55,14 @@ func HashPassword(password string) (string, error) {
 // GenerateTestToken は指定されたユーザーIDのテスト用有効なJWTを生成します
 func GenerateTestToken(userID uuid.UUID, secretKey string) (string, error) {
 	// 1. 有効期限を設定 (例: 7日間。本番のjwt.goと合わせる)
-	expirationTime := time.Now().Add(7 * 24 * time.Hour)
+	expirationTime := utils.NowJST().Add(7 * 24 * time.Hour)
 
 	// 2. クレームを作成 (jwt.go の Claims 構造体を使用)
 	claims := &TestClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(utils.NowJST()),
 			// その他のクレーム (Issuer, Subjectなど) も、jwt.goにあれば追加
 		},
 	}
@@ -80,7 +81,7 @@ func GenerateTestToken(userID uuid.UUID, secretKey string) (string, error) {
 // GenerateExpiredToken は指定されたユーザーIDの期限切れのテスト用JWTを生成します
 func GenerateExpiredToken(userID uuid.UUID, secretKey string) (string, error) {
 	// 1. 過去の有効期限を設定 (例: 1時間前)
-	expirationTime := time.Now().Add(-time.Hour)
+	expirationTime := utils.NowJST().Add(-time.Hour)
 
 	// 2. クレームを作成 (jwt.go の Claims 構造体を使用)
 	claims := &TestClaims{
@@ -103,7 +104,7 @@ func GenerateInvalidSignatureToken(userID uuid.UUID, secretKey string) (string, 
 	claims := &TestClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)), // 期限は有効
+			ExpiresAt: jwt.NewNumericDate(utils.NowJST().Add(time.Hour)), // 期限は有効
 		},
 	}
 	// 2. トークンを生成し、HS256で秘密鍵を使って署名

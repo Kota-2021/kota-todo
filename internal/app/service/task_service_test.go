@@ -4,6 +4,7 @@ import (
 	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/testutils/mock"
+	"my-portfolio-2025/pkg/utils"
 
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func (s *TaskTestSuite) TestCreateTask_Success() {
 	req := &models.TaskCreateRequest{
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 	}
 
 	// Runを使って詳細な検証を行うのは、ログに「どのフィールドが違ったか」出すため
@@ -88,7 +89,7 @@ func (s *TaskTestSuite) TestGetTaskByID_Success() {
 		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
 
@@ -117,7 +118,7 @@ func (s *TaskTestSuite) TestGetTasks_Success() {
 		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
 	tasks := []models.Task{*task}
@@ -165,12 +166,12 @@ func (s *TaskTestSuite) TestUpdateTask_Success() {
 		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
 	title := "Updated Test Task"
 	description := "This is an updated test task"
-	dueDate := time.Now().Add(time.Hour * 24)
+	dueDate := utils.NowJST().Add(time.Hour * 24)
 	status := models.TaskStatusInProgress
 	req := &models.TaskUpdateRequest{
 		Title:       &title,
@@ -205,7 +206,7 @@ func (s *TaskTestSuite) TestDeleteTask_Success() {
 		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
 
@@ -236,7 +237,7 @@ func (s *TaskTestSuite) TestGetTaskByID_Authorization() {
 		UserID:      uuid.New(),
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
 	unauthorizedUserID := uuid.New()
@@ -291,7 +292,7 @@ func (s *TaskTestSuite) TestDeleteTask_Authorization() {
 		UserID:      taskOwnerID,
 		Title:       "Test Task",
 		Description: "This is a test task",
-		DueDate:     time.Now().Add(time.Hour * 24),
+		DueDate:     utils.NowJST().Add(time.Hour * 24),
 		Status:      models.TaskStatusPending,
 	}
 

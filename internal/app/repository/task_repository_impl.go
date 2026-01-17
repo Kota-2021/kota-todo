@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"my-portfolio-2025/internal/app/models"
+	"my-portfolio-2025/pkg/utils"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,7 +70,7 @@ func (r *taskRepositoryImpl) Delete(taskID uuid.UUID) error {
 // FindUpcomingTasks: 指定した日付より前の期限のタスクを取得 (期限切れチェック用)
 func (r *taskRepositoryImpl) FindUpcomingTasks(ctx context.Context, threshold time.Time) ([]models.Task, error) {
 	var tasks []models.Task
-	now := time.Now()
+	now := utils.NowJST()
 
 	err := r.db.WithContext(ctx).
 		Where("due_date <= ? AND status != ? AND (last_notified_at IS NULL OR last_notified_at < ?)",

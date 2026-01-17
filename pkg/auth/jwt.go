@@ -4,6 +4,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"my-portfolio-2025/pkg/utils"
 	"os"
 	"time"
 
@@ -30,13 +31,13 @@ func getJWTSecret() ([]byte, error) {
 
 // GenerateToken は指定されたユーザーIDのJWTを生成します
 func GenerateToken(userID uuid.UUID) (string, error) {
-	expirationTime := time.Now().Add(7 * 24 * time.Hour)
+	expirationTime := utils.NowJST().Add(7 * 24 * time.Hour)
 
 	claims := &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(utils.NowJST()),
 		},
 	}
 

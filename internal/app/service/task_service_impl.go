@@ -8,6 +8,7 @@ import (
 	"my-portfolio-2025/internal/app/apperr"
 	"my-portfolio-2025/internal/app/models"
 	"my-portfolio-2025/internal/app/repository" // Repository層をインポート
+	"my-portfolio-2025/pkg/utils"
 	"time"
 
 	"github.com/google/uuid"
@@ -128,7 +129,7 @@ func (s *TaskServiceImpl) DeleteTask(userID uuid.UUID, taskID uuid.UUID) error {
 
 // CheckAndQueueDeadlines: 期限切れのタスクをチェックしてSQSにキューイングする
 func (s *TaskServiceImpl) CheckAndQueueDeadlines(ctx context.Context) error {
-	tasks, err := s.taskRepo.FindUpcomingTasks(ctx, time.Now().Add(1*time.Hour))
+	tasks, err := s.taskRepo.FindUpcomingTasks(ctx, utils.NowJST().Add(1*time.Hour))
 	if err != nil {
 		return fmt.Errorf("TaskService.CheckAndQueueDeadlines: %w", err)
 	}
