@@ -2,23 +2,23 @@ name: ▶️ CI/CD Pipeline
 
 on:
   ## 本番環境ではpushの3行を使用する
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
   ## 開発のみでは以下のworkflow_dispatchの6行を使用する
-  # workflow_dispatch:
-  #   inputs:
-  #     confirm:
-  #       description: 'Type "DEPLOY" to confirm the action.'
-  #       required: true
-  #       default: 'NO'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DEPLOY" to confirm the action.'
+        required: true
+        default: 'NO'
 
 jobs:
   deploy:
-  
+
     # 開発段階ではifの行はコメントアウトする。
     # ユーザーが "DEPLOY" と入力した場合のみ実行
-    # if: github.event.inputs.confirm == 'DEPLOY'
+    if: github.event.inputs.confirm == 'DEPLOY'
 
     runs-on: ubuntu-latest
     

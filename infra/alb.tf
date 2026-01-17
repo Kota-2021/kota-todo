@@ -22,6 +22,7 @@ resource "aws_lb" "main" {
   idle_timeout = 3600
 
   # 削除保護（本番環境では有効化を推奨）
+  # 開発環境ではdeployとdestroyを繰り返し行うため、削除保護を無効化する。
   enable_deletion_protection = false
 
   tags = {
@@ -60,7 +61,7 @@ resource "aws_lb_target_group" "main" {
 
   # WebSocket対応: セッションアフィニティ（スティッキーセッション）を有効化
   # 同じクライアントからのリクエストを同じタスクにルーティング
-  # WebSocket接続の一貫性を保つために推奨
+  # WebSocket接続の一貫性を保つために必要
   stickiness {
     enabled         = true
     type            = "lb_cookie"
@@ -73,9 +74,8 @@ resource "aws_lb_target_group" "main" {
 }
 
 # ----------------------------------------------------
-# 3. ALBリスナー: HTTP (ポート80) - WebSocket対応
+# 3. ALBリスナー: HTTP (ポート80) - HTTPSへリダイレクト
 # ----------------------------------------------------
-# HTTPリスナー (80) -> HTTPS (443) へリダイレクト
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -92,9 +92,8 @@ resource "aws_lb_listener" "http" {
 }
 
 # ----------------------------------------------------
-# 4. ALBリスナー: HTTPS (ポート443) - WebSocket対応（オプション）
+# 4. ALBリスナー: HTTPS (ポート443) - WebSocket対応
 # ----------------------------------------------------
-# HTTPSリスナー (443)
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
